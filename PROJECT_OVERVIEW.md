@@ -47,4 +47,4 @@ To transform goal-setting from a static list into a dynamic, interactive journey
 3.  **Multi-Goal Support**: Ability to track and visualize multiple complex goals simultaneously.
 4.  **Community Nudges**: Optional social features to share "streaks" and milestones with friends.
 5.  **Mobile Companion**: A dedicated React Native application for logging on the go.
-6.  **AI Voice Coaching**: Integration with Groq's upcoming multimodal features for vocal motivational check-ins.
+
