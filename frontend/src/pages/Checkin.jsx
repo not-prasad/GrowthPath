@@ -1,198 +1,200 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { CheckCircle } from 'lucide-react';
-import DashboardLayout from '../components/DashboardLayout';
+import { CheckCircle, ArrowLeft, Send, Sparkles, Feather, Book, BookOpen } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
+
+const MOODS = ['Happy 😊', 'Neutral 😐', 'Stressed 😞', 'Tired 😴'];
+const HURDLES = [
+  { id: 'Busy', label: 'Overwhelmed' },
+  { id: 'Tired', label: 'Low Energy' },
+  { id: 'Distracted', label: 'Distracted' },
+  { id: 'Mental', label: 'Mental Block' }
+];
+
+const playSound = (url) => {
+  const audio = new Audio(url);
+  audio.volume = 0.15;
+  audio.play().catch(() => {});
+};
 
 function Checkin() {
   const [goal, setGoal] = useState(null);
-  const [mood, setMood] = useState('Happy 😊');
-  const [focusLevel, setFocusLevel] = useState(3);
+  const [context, setContext] = useState(null);
+  const [loading, setLoading] = useState(true);
+  
+  const [mood, setMood] = useState('Neutral 😐');
   const [taskDone, setTaskDone] = useState(false);
+  const [selectedHurdles, setSelectedHurdles] = useState([]);
   const [notes, setNotes] = useState('');
+  const [focusLevel, setFocusLevel] = useState(3);
+  
+  const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const { token, logout } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
     const goalId = localStorage.getItem('growthpath_goal_id');
-    if (!goalId) {
-      navigate('/setup');
-      return;
-    }
-    const fetchGoal = async () => {
+    if (!goalId) { navigate('/setup'); return; }
+
+    const fetchAll = async () => {
       try {
-        const res = await fetch(`http://localhost:5000/api/goals/${goalId}`);
-        if (!res.ok) throw new Error('Not found');
-        setGoal(await res.json());
-      } catch {
-        navigate('/setup');
+        const headers = { 'Authorization': `Bearer ${token}` };
+        const [goalRes, ctxRes] = await Promise.all([
+          fetch(`http://localhost:5000/api/goals/${goalId}`, { headers }),
+          fetch(`http://localhost:5000/api/goals/${goalId}/checkin-context`, { headers })
+        ]);
+        if (goalRes.status === 401) { logout(); navigate('/login'); return; }
+        if (goalRes.ok) setGoal(await goalRes.json());
+        if (ctxRes.ok) setContext(await ctxRes.json());
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setLoading(false);
       }
     };
-    fetchGoal();
-  }, [navigate]);
+    fetchAll();
+  }, [token, navigate, logout]);
 
-  const handleCheckIn = async (e) => {
-    e.preventDefault();
+  const handleFinish = async () => {
+    setSubmitting(true);
+    playSound('https://www.soundjay.com/misc/sounds/paper-flick-1.mp3');
     const goalId = localStorage.getItem('growthpath_goal_id');
     try {
       const response = await fetch('http://localhost:5000/api/logs', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({
           goal_id: goalId,
+          todo_id: context?.todo?.id, 
           task_done: taskDone,
           mood,
           focus_level: focusLevel,
           notes,
+          hurdles: selectedHurdles.join(', ')
         }),
       });
-
       if (response.ok) {
         setSubmitted(true);
-        setTaskDone(false);
-        setNotes('');
-        setMood('Happy 😊');
-        setFocusLevel(3);
-        setTimeout(() => setSubmitted(false), 3000);
-      } else {
-        alert('Failed to submit check-in.');
+        setTimeout(() => navigate('/dashboard'), 2000);
       }
     } catch (error) {
-      console.error('Check-in error:', error);
-      alert('Error connecting to server.');
+      console.error(error);
+    } finally {
+      setSubmitting(false);
     }
   };
 
-  if (!goal) return null;
+  if (loading) return <div className="journal-container"><div className="spinner"></div></div>;
 
   return (
-    <DashboardLayout goal={goal}>
-      <div style={{ marginBottom: '2rem' }}>
-        <h1 style={{ fontSize: '2.2rem', fontWeight: 700, marginBottom: '0.4rem' }}>Daily Check-in</h1>
-        <p style={{ color: 'var(--text-secondary)' }}>Log today's progress for: <span style={{ color: '#a78bfa' }}>{goal.title}</span></p>
-      </div>
+    <div className="journal-container">
+      <div className="journal-page fade-in">
+        <button 
+          onClick={() => navigate('/dashboard')}
+          style={{ position: 'absolute', top: '2rem', left: '2rem', background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.875rem' }}
+        >
+          <ArrowLeft size={16} /> Close Journal
+        </button>
 
-      {submitted && (
-        <div style={{
-          background: 'rgba(124, 58, 237, 0.15)',
-          border: '1px solid rgba(124, 58, 237, 0.4)',
-          borderRadius: '12px',
-          padding: '1rem 1.5rem',
-          marginBottom: '2rem',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '0.75rem',
-          color: '#a78bfa',
-          fontWeight: 500,
-        }}>
-          <CheckCircle size={20} /> Check-in submitted successfully! Keep up the great work 🎉
-        </div>
-      )}
-
-      <div className="card" style={{ alignItems: 'flex-start', padding: '2.5rem', maxWidth: '700px' }}>
-        <form onSubmit={handleCheckIn} style={{ width: '100%' }}>
-
-          {/* Task Done */}
-          <div className="form-group">
-            <label>Did you complete your daily commitment?</label>
-            <div
-              onClick={() => setTaskDone(!taskDone)}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '1rem',
-                marginTop: '0.75rem',
-                padding: '1rem 1.5rem',
-                borderRadius: '12px',
-                cursor: 'pointer',
-                background: taskDone ? 'rgba(124, 58, 237, 0.15)' : 'rgba(0,0,0,0.3)',
-                border: taskDone ? '1px solid rgba(124, 58, 237, 0.5)' : '1px solid var(--panel-border)',
-                transition: 'all 0.2s ease',
-              }}
-            >
-              <div style={{
-                width: '22px', height: '22px', borderRadius: '6px',
-                background: taskDone ? 'var(--accent-purple)' : 'transparent',
-                border: taskDone ? '2px solid var(--accent-purple)' : '2px solid var(--text-secondary)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                flexShrink: 0, transition: 'all 0.2s'
-              }}>
-                {taskDone && <CheckCircle size={14} color="#fff" />}
-              </div>
-              <span style={{ color: taskDone ? '#a78bfa' : 'var(--text-primary)', fontWeight: 500 }}>
-                {taskDone ? '✅ Task completed!' : 'Click to mark as done'}
-              </span>
-            </div>
-          </div>
-
-          {/* Mood */}
-          <div className="form-group">
-            <label>How are you feeling today?</label>
-            <div style={{ display: 'flex', gap: '1rem', marginTop: '0.75rem', flexWrap: 'wrap' }}>
-              {['Happy 😊', 'Neutral 😐', 'Stressed 😞'].map(m => (
-                <div
-                  key={m}
-                  onClick={() => setMood(m)}
-                  style={{
-                    padding: '0.875rem 1.5rem',
-                    borderRadius: '10px',
-                    cursor: 'pointer',
-                    background: mood === m ? 'rgba(124, 58, 237, 0.2)' : 'rgba(255,255,255,0.04)',
-                    border: mood === m ? '1px solid rgba(124, 58, 237, 0.6)' : '1px solid var(--panel-border)',
-                    color: mood === m ? '#a78bfa' : 'var(--text-primary)',
-                    fontWeight: mood === m ? 600 : 400,
-                    transition: 'all 0.2s',
-                    fontSize: '1rem',
-                  }}
+        <div className="journal-ink">
+          <p style={{ fontSize: '0.875rem', color: '#94a3b8', fontStyle: 'italic', marginBottom: '1rem' }}>{new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
+          <h1>The Architect's Journal</h1>
+          
+          <div className="journal-entry-line">
+            <p>Today, I am feeling <span style={{ fontWeight: 700 }}>{mood.split(' ')[0]}</span>.</p>
+            <div style={{ marginTop: '0.75rem' }}>
+              {MOODS.map(m => (
+                <button 
+                  key={m} onClick={() => { setMood(m); playSound('https://www.soundjay.com/buttons/sounds/button-16.mp3'); }}
+                  className={`journal-chip ${mood === m ? 'active' : ''}`}
                 >
                   {m}
-                </div>
+                </button>
               ))}
             </div>
           </div>
 
-          {/* Focus Slider */}
-          <div className="form-group">
-            <label style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span>Focus Level</span>
-              <span style={{ color: '#a78bfa', fontWeight: 700 }}>{focusLevel} / 5</span>
-            </label>
-            <input
-              type="range"
-              min="1" max="5"
-              value={focusLevel}
-              onChange={(e) => setFocusLevel(Number(e.target.value))}
-              style={{ width: '100%', marginTop: '0.75rem', accentColor: 'var(--accent-purple)' }}
+          <div className="journal-entry-line" style={{ animationDelay: '0.2s' }}>
+            <p>Regarding the objective: <span style={{ fontWeight: 700, fontStyle: 'italic' }}>"{context?.todo?.task_description || goal?.title}"</span>...</p>
+            <div style={{ marginTop: '0.75rem' }}>
+              <button 
+                onClick={() => setTaskDone(true)}
+                className={`journal-chip ${taskDone ? 'active' : ''}`}
+                style={{ borderColor: taskDone ? '#10b981' : '#dcd7c9', color: taskDone ? '#fff' : '#2c3e50', background: taskDone ? '#10b981' : 'transparent' }}
+              >
+                Objective Conquered
+              </button>
+              <button 
+                onClick={() => setTaskDone(false)}
+                className={`journal-chip ${!taskDone ? 'active' : ''}`}
+                style={{ borderColor: !taskDone ? '#ef4444' : '#dcd7c9', color: !taskDone ? '#fff' : '#2c3e50', background: !taskDone ? '#ef4444' : 'transparent' }}
+              >
+                Hurdles Encountered
+              </button>
+            </div>
+          </div>
+
+          {!taskDone && (
+            <div className="journal-entry-line" style={{ animationDelay: '0.4s' }}>
+              <p>The resistance was primarily due to:</p>
+              <div style={{ marginTop: '0.75rem' }}>
+                {HURDLES.map(h => (
+                  <button 
+                    key={h.id} onClick={() => {
+                        setSelectedHurdles(prev => prev.includes(h.id) ? prev.filter(x => x !== h.id) : [...prev, h.id]);
+                        playSound('https://www.soundjay.com/buttons/sounds/button-16.mp3');
+                    }}
+                    className={`journal-chip ${selectedHurdles.includes(h.id) ? 'active' : ''}`}
+                  >
+                    {h.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="journal-entry-line" style={{ border: 'none', animationDelay: '0.6s' }}>
+            <p style={{ marginBottom: '1rem' }}>{context?.ai_prompt || "Any final reflections on today's path?"}</p>
+            <textarea 
+              value={notes} onChange={(e) => setNotes(e.target.value)}
+              placeholder="Start writing..."
+              style={{ 
+                width: '100%', background: 'transparent', border: 'none', borderLeft: '2px solid #e8e4d9', 
+                padding: '1rem', fontStyle: 'italic', fontSize: '1.1rem', color: '#34495e',
+                fontFamily: 'inherit', minHeight: '150px', outline: 'none'
+              }}
             />
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '0.4rem', color: 'var(--text-secondary)', fontSize: '0.8rem' }}>
-              <span>Distracted</span>
-              <span>Laser Focused</span>
-            </div>
-            <div className="focus-dots" style={{ justifyContent: 'center', marginTop: '1rem' }}>
-              {[1,2,3,4,5].map(n => (
-                <div key={n} className={`focus-dot ${n <= focusLevel ? 'filled' : ''}`} style={{ width: '18px', height: '18px' }} />
-              ))}
-            </div>
           </div>
 
-          {/* Notes */}
-          <div className="form-group">
-            <label>Notes <span style={{ color: 'var(--text-secondary)', fontWeight: 400 }}>(optional)</span></label>
-            <textarea
-              className="form-control"
-              rows="3"
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="Any reflections, wins, or blockers for today?"
-            ></textarea>
+          <div style={{ marginTop: '3rem', textAlign: 'center' }}>
+            {submitted ? (
+              <div style={{ color: '#10b981', animation: 'fadeIn 0.5s' }}>
+                <CheckCircle size={40} style={{ marginBottom: '1rem' }} />
+                <p style={{ fontWeight: 700 }}>Entry recorded. Until tomorrow, Architect.</p>
+              </div>
+            ) : (
+              <button 
+                disabled={submitting} onClick={handleFinish}
+                style={{ 
+                  background: '#2c3e50', color: '#fdfcf0', border: 'none', padding: '1rem 3.5rem', 
+                  borderRadius: '4px', fontSize: '1rem', cursor: 'pointer', transition: 'all 0.2s',
+                  display: 'inline-flex', alignItems: 'center', gap: '0.75rem'
+                }}
+              >
+                {submitting ? 'Archiving...' : <><Feather size={18} /> Seal Entry</>}
+              </button>
+            )}
           </div>
+        </div>
 
-          <button type="submit" className="btn btn-primary" style={{ marginTop: '0.5rem' }}>
-            Submit Check-in ✨
-          </button>
-        </form>
+        <div style={{ position: 'absolute', bottom: '2rem', left: 0, right: 0, textAlign: 'center', color: '#94a3b8', fontSize: '0.75rem', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+            Architect's Personal Log — GrowthPath OS
+        </div>
       </div>
-    </DashboardLayout>
+    </div>
   );
 }
 
 export default Checkin;
+

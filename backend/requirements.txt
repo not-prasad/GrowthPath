@@ -1,5 +1,8 @@
-Flask
-Flask-CORS
-pandas
-groq
-python-dotenv
+Flask==3.1.0
+Flask-CORS==5.0.1
+Flask-JWT-Extended==4.7.1
+bcrypt==4.2.1
+pandas==2.2.3
+groq==0.18.0
+python-dotenv==1.0.1
+gunicorn==23.0.0

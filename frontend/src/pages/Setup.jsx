@@ -1,17 +1,19 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Target } from 'lucide-react';
+import { Target, ArrowRight } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 
 function Setup() {
   const navigate = useNavigate();
+  const { token, logout } = useAuth();
   const [formData, setFormData] = useState({
     title: '',
-    category: 'Health',
     deadline: '',
     commitment: '',
     difficulty: 'Medium',
     motivation: ''
   });
+  const [loading, setLoading] = useState(false);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -24,106 +26,92 @@ function Setup() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setLoading(true);
     
     try {
       const response = await fetch('http://localhost:5000/api/goals', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify(formData),
       });
       
       const data = await response.json();
       
+      if (response.status === 401) { logout(); navigate('/login'); return; }
+
       if (response.ok) {
         localStorage.setItem('growthpath_goal_id', data.goal_id);
         navigate('/dashboard');
       } else {
-        console.error('Failed to create goal:', data);
-        alert('Failed to generate plan. Make sure backend is running.');
+        alert(data.error || 'Failed to create goal.');
       }
     } catch (error) {
       console.error('Error connecting to backend:', error);
       alert('Error connecting to backend.');
+    } finally {
+      setLoading(false);
     }
   };
-
-  const categories = [
-    { id: 'Health', label: 'Health', icon: '💪' },
-    { id: 'Study', label: 'Study', icon: '📚' },
-    { id: 'Skill', label: 'Skill', icon: '🎯' },
-    { id: 'Habit', label: 'Habit', icon: '🔁' },
-    { id: 'Custom', label: 'Custom', icon: '✨' },
-  ];
 
   const difficulties = ['Easy', 'Medium', 'Hard'];
 
   return (
-    <>
-      <div className="blob-bg">
-        <div className="blob-1"></div>
-        <div className="blob-2"></div>
-      </div>
-      <div className="setup-layout fade-in">
-        
-        <div className="setup-left">
-          <Target size={64} color="var(--accent-purple)" style={{ marginBottom: '2rem' }} />
-          <h1 className="title-huge text-gradient" style={{ fontSize: '4rem', marginBottom: '1.5rem', textAlign: 'left' }}>
-            Transform Idea To Action
+    <div className="setup-layout fade-in">
+      
+      <div className="setup-left">
+        <div style={{ maxWidth: '440px' }}>
+          <div style={{ 
+            width: '48px', height: '48px', background: 'var(--accent-primary)', borderRadius: '12px', 
+            display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '2rem'
+          }}>
+            <Target size={28} color="#fff" />
+          </div>
+          <h1 style={{ fontSize: '2.5rem', fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.025em', lineHeight: 1.1, marginBottom: '1.5rem' }}>
+            Transform Idea <br/> To Action.
           </h1>
-          <p className="subtitle" style={{ textAlign: 'left', marginBottom: '2rem' }}>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '1.125rem', lineHeight: 1.6, marginBottom: '2.5rem' }}>
             Define what you want to achieve, break it down, and build the environment you need to succeed.
           </p>
-          <div className="styled-quote" style={{ maxWidth: '400px' }}>
-            <p>"A goal without a timeline is just a dream."</p>
+          
+          <div style={{ 
+            padding: '1.5rem', background: 'var(--panel-bg)', border: '1px solid var(--panel-border)', borderRadius: '12px', 
+            boxShadow: 'var(--card-shadow)', fontStyle: 'italic', color: 'var(--text-secondary)' 
+          }}>
+            "A goal without a timeline is just a dream."
           </div>
         </div>
+      </div>
 
-        <div className="setup-right">
-          <h2 style={{ fontSize: '2rem', marginBottom: '2rem', width: '100%', maxWidth: '600px', textAlign: 'left' }}>Architect Your Next Goal</h2>
+      <div className="setup-right">
+        <div style={{ width: '100%', maxWidth: '580px' }}>
+          <h2 style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '2rem' }}>Architect Your Next Goal</h2>
           
-          <div className="form-container" style={{ margin: 0, backdropFilter: 'blur(20px)' }}>
-            <form onSubmit={handleSubmit}>
-              <div className="form-group">
-                <label htmlFor="title">What's your goal?</label>
-                <input 
-                  type="text" 
-                  id="title" 
-                  name="title" 
-                  className="form-control" 
-                  placeholder="e.g. Meditate for 100 days"
-                  value={formData.title}
-                  onChange={handleChange}
-                  required 
-                />
-              </div>
+          <form onSubmit={handleSubmit}>
+            <div className="form-group">
+              <label>What's your goal?</label>
+              <input 
+                type="text" 
+                name="title" 
+                className="form-control" 
+                placeholder="e.g. Meditate for 100 days"
+                value={formData.title}
+                onChange={handleChange}
+                required 
+              />
+            </div>
 
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
               <div className="form-group">
-                <label>Category</label>
-                <div className="category-selector">
-                  {categories.map(cat => (
-                    <div 
-                      key={cat.id} 
-                      className={`selectable-item ${formData.category === cat.id ? 'active' : ''}`}
-                      onClick={() => setSelection('category', cat.id)}
-                    >
-                      <div style={{ fontSize: '1.5rem', marginBottom: '0.25rem' }}>{cat.icon}</div>
-                      <div style={{ fontSize: '0.9rem', fontWeight: 500 }}>{cat.label}</div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="form-group">
-                <label htmlFor="deadline">Deadline (Days)</label>
+                <label>Deadline (Days)</label>
                 <input 
                   type="number" 
-                  id="deadline" 
                   name="deadline" 
                   className="form-control" 
                   min="1"
-                  placeholder="e.g. 30"
+                  placeholder="30"
                   value={formData.deadline}
                   onChange={handleChange}
                   required 
@@ -131,55 +119,54 @@ function Setup() {
               </div>
 
               <div className="form-group">
-                <label htmlFor="commitment">Daily Commitment</label>
-                <input 
-                  type="text" 
-                  id="commitment" 
-                  name="commitment" 
-                  className="form-control" 
-                  placeholder="e.g. 15 mins daily, Code 1 hour"
-                  value={formData.commitment}
-                  onChange={handleChange}
-                  required 
-                />
-              </div>
-
-              <div className="form-group">
                 <label>Difficulty</label>
-                <div className="difficulty-selector">
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.5rem' }}>
                   {difficulties.map(diff => (
                     <div 
                       key={diff} 
                       className={`selectable-item ${formData.difficulty === diff ? 'active' : ''}`}
-                      style={{ padding: '0.75rem', borderRadius: '99px' }}
                       onClick={() => setSelection('difficulty', diff)}
+                      style={{ padding: '0.625rem 0' }}
                     >
                       {diff}
                     </div>
                   ))}
                 </div>
               </div>
+            </div>
 
-              <div className="form-group">
-                <label htmlFor="motivation">Motivation (Optional)</label>
-                <textarea 
-                  id="motivation" 
-                  name="motivation" 
-                  className="form-control" 
-                  placeholder="Why is achieving this important to you?"
-                  value={formData.motivation}
-                  onChange={handleChange}
-                ></textarea>
-              </div>
+            <div className="form-group">
+              <label>Daily Commitment</label>
+              <input 
+                type="text" 
+                name="commitment" 
+                className="form-control" 
+                placeholder="e.g. 15 mins daily, Code 1 hour"
+                value={formData.commitment}
+                onChange={handleChange}
+                required 
+              />
+            </div>
 
-              <button type="submit" className="btn btn-primary" style={{ marginTop: '1rem', fontSize: '1.1rem', width: '100%' }}>
-                Generate My Plan ✨
-              </button>
-            </form>
-          </div>
+            <div className="form-group">
+              <label>Motivation (Optional)</label>
+              <textarea 
+                name="motivation" 
+                className="form-control" 
+                placeholder="Why is achieving this important to you?"
+                value={formData.motivation}
+                onChange={handleChange}
+                style={{ minHeight: '80px' }}
+              ></textarea>
+            </div>
+
+            <button type="submit" disabled={loading} className="btn btn-primary" style={{ width: '100%', padding: '0.875rem' }}>
+              {loading ? 'Architecting AI Plan...' : 'Generate My Plan'} <ArrowRight size={18} style={{ marginLeft: '0.5rem' }} />
+            </button>
+          </form>
         </div>
       </div>
-    </>
+    </div>
   );
 }
 

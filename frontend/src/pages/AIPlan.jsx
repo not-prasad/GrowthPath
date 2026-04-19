@@ -1,42 +1,50 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Sparkles, BookOpen } from 'lucide-react';
+import { Sparkles, BookOpen, Check, AlertTriangle } from 'lucide-react';
 import DashboardLayout from '../components/DashboardLayout';
+import { useAuth } from '../context/AuthContext';
 
 function AIPlan() {
   const [goal, setGoal] = useState(null);
-  const [plan, setPlan] = useState('');
+  const [todos, setTodos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const { token, logout } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
-    const goalId = localStorage.getItem('growthpath_goal_id');
-    if (!goalId) { navigate('/setup'); return; }
+    const goalId_raw = localStorage.getItem('growthpath_goal_id');
+    if (!goalId_raw) { navigate('/setup'); return; }
+    let goalId = goalId_raw;
 
     const fetchData = async () => {
       try {
-        const goalRes = await fetch(`http://localhost:5000/api/goals/${goalId}`);
-        if (!goalRes.ok) throw new Error('Goal not found');
-        const goalData = await goalRes.json();
-        setGoal(goalData);
+        const headers = { 'Authorization': `Bearer ${token}` };
+        let goalRes = await fetch(`http://localhost:5000/api/goals/${goalId}`, { headers });
+        
+        if (goalRes.status === 401) { logout(); navigate('/login'); return; }
 
-        const planRes = await fetch('http://localhost:5000/api/ai/plan', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            goal_title: goalData.title,
-            category: goalData.category,
-            deadline: goalData.deadline,
-            commitment: goalData.commitment,
-            difficulty: goalData.difficulty,
-            motivation: goalData.motivation,
-          }),
-        });
-
-        const planData = await planRes.json();
-        if (planData.error) throw new Error(planData.error);
-        setPlan(planData.plan || '');
+        if (!goalRes.ok) {
+          const listRes = await fetch('http://localhost:5000/api/goals', { headers });
+          const userGoals = await listRes.json();
+          if (userGoals.length > 0) {
+            goalId = userGoals[0].id;
+            localStorage.setItem('growthpath_goal_id', goalId);
+            goalRes = await fetch(`http://localhost:5000/api/goals/${goalId}`, { headers });
+          } else {
+            navigate('/setup');
+            return;
+          }
+        }
+        
+        setGoal(await goalRes.json());
+        
+        const todosRes = await fetch(`http://localhost:5000/api/goals/${goalId}/todos`, { headers });
+        if (!todosRes.ok) throw new Error('Failed to load tasks');
+        
+        const todosData = await todosRes.json();
+        setTodos(todosData);
+        
       } catch (err) {
         console.error(err);
         setError(err.message || 'Failed to generate plan.');
@@ -46,148 +54,132 @@ function AIPlan() {
     };
 
     fetchData();
-  }, [navigate]);
+  }, [token, navigate]);
 
-  // Format the AI response: convert markdown-like **bold** and bullet points
-  const formatPlan = (text) => {
-    return text
-      .split('\n')
-      .filter(line => line.trim() !== '')
-      .map((line, i) => {
-        // Section header (e.g. ## Week 1)
-        if (line.startsWith('##')) {
-          return (
-            <h3 key={i} style={{ color: '#a78bfa', fontWeight: 700, fontSize: '1.1rem', marginTop: '1.5rem', marginBottom: '0.5rem' }}>
-              {line.replace(/^#+\s*/, '')}
-            </h3>
-          );
-        }
-        if (line.startsWith('#')) {
-          return (
-            <h2 key={i} style={{ color: '#c4b5fd', fontWeight: 800, fontSize: '1.3rem', marginTop: '1.5rem', marginBottom: '0.5rem' }}>
-              {line.replace(/^#+\s*/, '')}
-            </h2>
-          );
-        }
-        // Bullet point
-        if (line.startsWith('*') || line.startsWith('-') || line.startsWith('•')) {
-          const content = line.replace(/^[\*\-•]\s*/, '');
-          return (
-            <div key={i} style={{ display: 'flex', gap: '0.75rem', marginBottom: '0.5rem', paddingLeft: '0.5rem' }}>
-              <span style={{ color: '#7c3aed', marginTop: '2px', flexShrink: 0 }}>▸</span>
-              <span style={{ color: 'var(--text-primary)', lineHeight: 1.65, dangerouslySetInnerHTML: undefined }}>
-                {formatInline(content)}
-              </span>
-            </div>
-          );
-        }
-        // Regular paragraph
-        return (
-          <p key={i} style={{ color: 'var(--text-secondary)', lineHeight: 1.75, marginBottom: '0.4rem' }}>
-            {formatInline(line)}
-          </p>
-        );
+  const toggleTodo = async (todoId) => {
+    // Optimistic update
+    setTodos(prev => prev.map(t => t.id === todoId ? { ...t, is_completed: !t.is_completed } : t));
+    
+    try {
+      await fetch(`http://localhost:5000/api/todos/${todoId}/toggle`, {
+        method: 'PUT',
+        headers: { 'Authorization': `Bearer ${token}` }
       });
-  };
-
-  // Bold (**text**) inline formatting
-  const formatInline = (text) => {
-    const parts = text.split(/(\*\*[^*]+\*\*)/g);
-    return parts.map((part, i) => {
-      if (part.startsWith('**') && part.endsWith('**')) {
-        return <strong key={i} style={{ color: '#f1f5f9', fontWeight: 600 }}>{part.slice(2, -2)}</strong>;
-      }
-      return part;
-    });
+    } catch (err) {
+      console.error(err);
+      // Revert on error
+      setTodos(prev => prev.map(t => t.id === todoId ? { ...t, is_completed: !t.is_completed } : t));
+      alert('Failed to update task');
+    }
   };
 
   if (!goal) return null;
 
+  const completedCount = todos.filter(t => t.is_completed).length;
+  const progress = todos.length > 0 ? Math.round((completedCount / todos.length) * 100) : 0;
+
   return (
     <DashboardLayout goal={goal}>
-      <div style={{ marginBottom: '2rem' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem' }}>
-          <div style={{
-            width: '42px', height: '42px', borderRadius: '12px',
-            background: 'rgba(124,58,237,0.2)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            boxShadow: '0 0 16px rgba(124,58,237,0.3)',
-          }}>
-            <Sparkles size={22} color="#a78bfa" />
-          </div>
-          <div>
-            <h1 style={{ fontSize: '2.2rem', fontWeight: 700, lineHeight: 1 }}>AI Plan</h1>
-            <p style={{ color: '#a78bfa', fontSize: '0.85rem', marginTop: '0.2rem' }}>Powered by Google Gemini</p>
-          </div>
+      <div style={{ marginBottom: '2.5rem', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+        <div>
+          <h1 style={{ fontSize: '1.875rem', fontWeight: 800, marginBottom: '0.25rem' }}>AI Action Plan</h1>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '0.9375rem' }}>
+            A tailored day-by-day checklist designed for <span style={{ color: 'var(--accent-primary)', fontWeight: 600 }}>{goal.title}</span>.
+          </p>
         </div>
-        <p style={{ color: 'var(--text-secondary)' }}>Your personalized week-by-week roadmap for: <span style={{ color: '#a78bfa', fontWeight: 500 }}>{goal.title}</span></p>
+        
+        {todos.length > 0 && (
+          <div style={{ textAlign: 'right' }}>
+            <div style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+              {progress}%
+            </div>
+            <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.05em' }}>
+              Completion
+            </div>
+          </div>
+        )}
       </div>
 
       {loading ? (
-        <div style={{
-          background: 'linear-gradient(135deg, rgba(124,58,237,0.1), rgba(109,40,217,0.05))',
-          border: '1px solid rgba(124,58,237,0.3)',
-          borderRadius: '20px',
-          padding: '4rem',
-          textAlign: 'center',
-        }}>
-          <div style={{
-            width: '56px', height: '56px', borderRadius: '50%',
-            border: '3px solid rgba(124,58,237,0.2)',
-            borderTopColor: '#7c3aed',
-            animation: 'spin 1s linear infinite',
-            margin: '0 auto 1.5rem',
-          }} />
-          <p style={{ color: '#a78bfa', fontWeight: 600, fontSize: '1.2rem', marginBottom: '0.5rem' }}>
-            GrowthPath AI is building your plan...
+        <div className="card" style={{ padding: '6rem 2rem', textAlign: 'center' }}>
+          <div style={{ 
+            width: '48px', height: '48px', border: '3px solid var(--panel-border)', borderTopColor: 'var(--accent-primary)', 
+            borderRadius: '50%', animation: 'spin 1s linear infinite', margin: '0 auto 1.5rem' 
+          }}></div>
+          <h3 style={{ fontSize: '1.125rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '0.5rem' }}>Loading your roadmap</h3>
+          <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', maxWidth: '300px', margin: '0 auto' }}>
+            Pulling your auto-generated checklist based on the deadline context.
           </p>
-          <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>This takes a few seconds. Gemini is personalizing it just for you.</p>
         </div>
       ) : error ? (
-        <div style={{
-          background: 'rgba(239,68,68,0.08)',
-          border: '1px solid rgba(239,68,68,0.3)',
-          borderRadius: '16px',
-          padding: '2rem',
-          color: '#fca5a5',
-        }}>
-          <p style={{ fontWeight: 600, marginBottom: '0.5rem' }}>⚠️ Failed to generate plan</p>
-          <p style={{ fontSize: '0.9rem', opacity: 0.8 }}>{error}</p>
+        <div style={{ background: '#fef2f2', border: '1px solid #fee2e2', borderRadius: '12px', padding: '2rem', display: 'flex', gap: '1rem' }}>
+          <AlertTriangle color="#ef4444" size={24} />
+          <div>
+            <h3 style={{ fontSize: '1rem', fontWeight: 700, color: '#991b1b', marginBottom: '0.5rem' }}>Generation Error</h3>
+            <p style={{ fontSize: '0.875rem', color: '#b91c1c' }}>{error}</p>
+          </div>
         </div>
       ) : (
-        <div style={{
-          background: 'linear-gradient(160deg, rgba(124,58,237,0.07) 0%, rgba(10,8,20,0) 60%)',
-          border: '1px solid rgba(124,58,237,0.25)',
-          borderRadius: '20px',
-          padding: '2.5rem',
-          boxShadow: '0 0 60px rgba(124,58,237,0.06)',
-          position: 'relative',
-          overflow: 'hidden',
-        }}>
-          {/* Decorative glow */}
-          <div style={{
-            position: 'absolute', top: '-60px', right: '-60px',
-            width: '200px', height: '200px',
-            background: 'radial-gradient(circle, rgba(124,58,237,0.2) 0%, transparent 70%)',
-            borderRadius: '50%', pointerEvents: 'none',
-          }} />
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '2rem', paddingBottom: '1.5rem', borderBottom: '1px solid var(--panel-border)' }}>
-            <BookOpen size={18} color="#a78bfa" />
-            <span style={{ color: '#a78bfa', fontWeight: 600, fontSize: '0.9rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Your Personalized Growth Plan</span>
+        <div className="card" style={{ padding: '2rem', maxWidth: '800px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem', paddingBottom: '1.5rem', borderBottom: '1px solid var(--panel-border)', marginBottom: '1.5rem' }}>
+            <BookOpen size={20} color="var(--accent-primary)" />
+            <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--accent-primary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              Generated Tasks ({todos.length})
+            </span>
           </div>
 
-          <div style={{ position: 'relative', zIndex: 1 }}>
-            {formatPlan(plan)}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+            {todos.map(todo => (
+              <div 
+                key={todo.id}
+                onClick={() => toggleTodo(todo.id)}
+                style={{
+                  display: 'flex', alignItems: 'flex-start', gap: '1rem', padding: '1.25rem',
+                  background: todo.is_completed ? 'var(--accent-subtle)' : 'var(--input-bg)',
+                  border: todo.is_completed ? '1px solid var(--accent-border)' : '1px solid var(--panel-border)',
+                  borderRadius: '12px', cursor: 'pointer', transition: 'all 0.15s ease',
+                  opacity: todo.is_completed ? 0.7 : 1
+                }}
+              >
+                <div style={{
+                  width: '24px', height: '24px', borderRadius: '6px', marginTop: '2px',
+                  background: todo.is_completed ? 'var(--accent-primary)' : 'transparent',
+                  border: todo.is_completed ? '2px solid var(--accent-primary)' : '2px solid var(--panel-border)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                  transition: 'background 0.2s'
+                }}>
+                  {todo.is_completed && <Check size={14} color="#fff" strokeWidth={3} />}
+                </div>
+                
+                <div>
+                  <div style={{
+                    fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em',
+                    color: todo.is_completed ? 'var(--accent-primary)' : 'var(--text-muted)', marginBottom: '0.25rem'
+                  }}>
+                    {todo.timeframe_label}
+                  </div>
+                  <div style={{
+                    fontSize: '0.9375rem', color: todo.is_completed ? 'var(--text-secondary)' : 'var(--text-primary)',
+                    textDecoration: todo.is_completed ? 'line-through' : 'none', lineHeight: 1.5
+                  }}>
+                    {todo.task_description}
+                  </div>
+                </div>
+              </div>
+            ))}
+            
+            {todos.length === 0 && (
+               <div style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '2rem' }}>
+                 No tasks found for this goal.
+               </div>
+            )}
           </div>
 
-          <div style={{
-            marginTop: '2rem', paddingTop: '1.5rem', borderTop: '1px solid var(--panel-border)',
-            display: 'flex', alignItems: 'center', gap: '0.5rem',
-            color: 'var(--text-secondary)', fontSize: '0.8rem',
+          <div style={{ 
+            marginTop: '3rem', paddingTop: '1.5rem', borderTop: '1px solid var(--panel-border)', 
+            display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-muted)', fontSize: '0.75rem' 
           }}>
-            <Sparkles size={14} color="var(--text-secondary)" />
-            Generated by Google Gemini · Results are personalized and may vary
+            <Sparkles size={14} /> Driven by AI Auto-Categorization & Planning
           </div>
         </div>
       )}
