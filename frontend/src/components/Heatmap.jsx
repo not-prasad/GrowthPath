@@ -87,8 +87,8 @@ export default function Heatmap({ logs }) {
             </div>
             
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '4px' }}>
-              {WEEK_DAYS.map(wd => (
-                <div key={wd} style={{ fontSize: '0.65rem', fontWeight: 800, color: 'var(--text-muted)', textAlign: 'center', marginBottom: '4px' }}>{wd}</div>
+              {WEEK_DAYS.map((wd, idx) => (
+                <div key={`${wd}-${idx}`} style={{ fontSize: '0.65rem', fontWeight: 800, color: 'var(--text-muted)', textAlign: 'center', marginBottom: '4px' }}>{wd}</div>
               ))}
               {month.days.map((day, dIdx) => (
                 <div 

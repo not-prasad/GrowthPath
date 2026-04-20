@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Target } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { API_BASE, apiErrorMessage, safeJson } from '../api/base';
 
 function Login() {
   const [email, setEmail] = useState('');
@@ -17,19 +18,19 @@ function Login() {
     setLoading(true);
 
     try {
-      const response = await fetch('http://localhost:5000/api/login', {
+      const response = await fetch(`${API_BASE}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
       });
 
-      const data = await response.json();
+      const data = await safeJson(response);
 
       if (response.ok) {
         login(data.user, data.token);
         navigate('/dashboard');
       } else {
-        setError(data.error || 'Invalid credentials');
+        setError(apiErrorMessage(data, 'Invalid credentials'));
       }
     } catch (err) {
       setError('Failed to connect to server');

@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
+import { API_BASE, authHeaders, safeJson } from '../api/base';
 
 function DashboardLayout({ children, goal }) {
   const { user, token, logout } = useAuth();
@@ -18,10 +19,11 @@ function DashboardLayout({ children, goal }) {
   useEffect(() => {
     const fetchProfile = async () => {
       try {
-        const res = await fetch('http://localhost:5000/api/user/profile', {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        if (res.ok) setProfile(await res.json());
+        const res = await fetch(`${API_BASE}/me`, { headers: authHeaders(token) });
+        if (res.ok) {
+          const data = await safeJson(res);
+          setProfile(data?.user || null);
+        }
       } catch (e) {
         console.error(e);
       }
@@ -30,15 +32,12 @@ function DashboardLayout({ children, goal }) {
   }, [token]);
 
   const navItems = [
-    { to: '/dashboard', label: 'Dashboard',  icon: <LayoutDashboard size={17} /> },
-    { to: '/mastery',   label: 'Mastery',    icon: <Star size={17} /> },
-    { to: '/checkin',   label: 'Check-in',   icon: <CheckCircle size={17} /> },
-    { to: '/analysis',  label: 'Analysis',   icon: <BarChart2 size={17} /> },
-    { to: '/history',   label: 'History',    icon: <History size={17} /> },
-    { to: '/ai-plan',   label: 'AI Plan',    icon: <Sparkles size={17} /> },
-    { to: '/insights',  label: 'Insights',   icon: <Brain size={17} /> },
-    { to: '/habits',    label: 'Habit Stack',icon: <Layers size={17} /> },
-    { to: '/goals',     label: 'Manage Goals',icon: <Settings size={17} /> },
+    { to: '/dashboard', label: 'Overview',        icon: <LayoutDashboard size={17} /> },
+    { to: '/log',       label: 'Run Daily Log',   icon: <CheckCircle size={17} /> },
+    { to: '/history',   label: 'History',         icon: <History size={17} /> },
+    { to: '/mastery',   label: 'Performance',     icon: <Star size={17} /> },
+    { to: '/insights',  label: 'Lab Insights',    icon: <Brain size={17} /> },
+    { to: '/goals',     label: 'Manage Goals',    icon: <Settings size={17} /> },
   ];
 
   const handleLogout = () => {
@@ -62,7 +61,7 @@ function DashboardLayout({ children, goal }) {
             }}>
               <Target size={17} color="#fff" />
             </div>
-            GrowthPath
+            Perf. Lab
           </h2>
           <button
             id="theme-toggle"
@@ -76,19 +75,19 @@ function DashboardLayout({ children, goal }) {
 
         {/* Global Level Profile */}
         {profile && (
-          <div style={{ marginBottom: '2rem', padding: '1.25rem', background: 'var(--panel-bg)', borderRadius: '12px', border: '1px solid var(--panel-border)' }}>
+          <div style={{ marginBottom: '2rem', padding: '1.125rem', background: 'var(--panel-bg)', borderRadius: '10px', border: '1px solid var(--panel-border)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-              <span style={{ fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-secondary)' }}>Mastery</span>
-              <span style={{ fontSize: '0.875rem', fontWeight: 800, color: 'var(--accent-primary)' }}>Lvl {profile.level}</span>
+              <span style={{ fontSize: '0.65rem', fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-muted)', letterSpacing: '0.08em' }}>XP Progress</span>
+              <span style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--accent-primary)', fontVariantNumeric: 'tabular-nums' }}>Lvl {profile.level}</span>
             </div>
-            <div style={{ width: '100%', height: '6px', background: 'var(--input-bg)', borderRadius: '999px', overflow: 'hidden' }}>
+            <div style={{ width: '100%', height: '4px', background: 'var(--input-bg)', borderRadius: '999px', overflow: 'hidden' }}>
               <div style={{ 
-                width: `${((profile.exp % 1000) / 10)}%`, height: '100%', background: 'linear-gradient(90deg, var(--accent-primary), #a855f7)', 
-                borderRadius: '999px', transition: 'width 0.5s ease' 
+                width: `${(((profile.total_xp || 0) % 1000) / 10)}%`, height: '100%', background: 'var(--accent-primary)', 
+                borderRadius: '999px', transition: 'width 0.5s ease'
               }} />
             </div>
-            <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textAlign: 'right', marginTop: '0.4rem', fontWeight: 600 }}>
-              {profile.exp % 1000} / 1000 XP
+            <div style={{ fontSize: '0.625rem', color: 'var(--text-muted)', textAlign: 'right', marginTop: '0.4rem', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
+              {(profile.total_xp || 0) % 1000} / 1000 XP
             </div>
           </div>
         )}

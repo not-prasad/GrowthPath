@@ -1,25 +1,24 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Target, CheckCircle, Clock, Trash2, Plus, ArrowRight, Settings, Star } from 'lucide-react';
+import { Target, CheckCircle, Clock, Plus, Star } from 'lucide-react';
 import DashboardLayout from '../components/DashboardLayout';
 import { useAuth } from '../context/AuthContext';
+import { API_BASE, authHeaders, safeJson } from '../api/base';
 
 function Goals() {
   const [goals, setGoals] = useState([]);
   const [loading, setLoading] = useState(true);
-  const { token } = useAuth();
+  const { token, logout } = useAuth();
   const navigate = useNavigate();
   const activeGoalId = localStorage.getItem('growthpath_goal_id');
 
   const fetchGoals = async () => {
     setLoading(true);
     try {
-      const res = await fetch('http://localhost:5000/api/goals', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
+      const res = await fetch(`${API_BASE}/goals`, { headers: authHeaders(token) });
       if (res.status === 401) { logout(); navigate('/login'); return; }
-      const data = await res.json();
-      setGoals(data);
+      const data = await safeJson(res);
+      setGoals(data?.goals || []);
     } catch (err) {
       console.error(err);
     } finally {
@@ -32,48 +31,8 @@ function Goals() {
   }, [token]);
 
   const switchGoal = (id) => {
-    localStorage.setItem('growthpath_goal_id', id);
+    localStorage.setItem('growthpath_goal_id', String(id));
     navigate('/dashboard');
-  };
-
-  const updateStatus = async (id, status) => {
-    try {
-      const res = await fetch(`http://localhost:5000/api/goals/${id}/status`, {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ status })
-      });
-      if (res.ok) fetchGoals();
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
-  const deleteGoal = async (id) => {
-    if (!window.confirm('Are you sure? This will delete all logs and tasks for this goal.')) return;
-    try {
-      const res = await fetch(`http://localhost:5000/api/goals/${id}`, {
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (res.ok) {
-        if (activeGoalId === id.toString()) {
-          // If we deleted the active goal, try to find another one
-          const remaining = goals.filter(g => g.id !== id);
-          if (remaining.length > 0) {
-            localStorage.setItem('growthpath_goal_id', remaining[0].id);
-          } else {
-            localStorage.removeItem('growthpath_goal_id');
-          }
-        }
-        fetchGoals();
-      }
-    } catch (err) {
-      console.error(err);
-    }
   };
 
   const activeGoals = goals.filter(g => g.status === 'active');
@@ -131,8 +90,6 @@ function Goals() {
                   {goal.id.toString() !== activeGoalId && (
                     <button className="btn btn-outline" style={{ fontSize: '0.75rem' }} onClick={() => switchGoal(goal.id)}>Switch</button>
                   )}
-                  <button className="btn btn-outline" style={{ fontSize: '0.75rem', color: 'var(--success)' }} onClick={() => updateStatus(goal.id, 'completed')}>Complete</button>
-                  <button className="btn btn-outline" style={{ color: 'var(--danger)', padding: '0.5rem' }} onClick={() => deleteGoal(goal.id)}><Trash2 size={16} /></button>
                 </div>
               </div>
             ))}
@@ -167,8 +124,7 @@ function Goals() {
                     </div>
                   </div>
                   <div style={{ display: 'flex', gap: '0.75rem' }}>
-                    <button className="btn btn-outline" style={{ fontSize: '0.75rem' }} onClick={() => updateStatus(goal.id, 'active')}>Re-activate</button>
-                    <button className="btn btn-outline" style={{ color: 'var(--danger)', padding: '0.5rem' }} onClick={() => deleteGoal(goal.id)}><Trash2 size={16} /></button>
+                    <button className="btn btn-outline" style={{ fontSize: '0.75rem' }} onClick={() => switchGoal(goal.id)}>View</button>
                   </div>
                 </div>
               ))}

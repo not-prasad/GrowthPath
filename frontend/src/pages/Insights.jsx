@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Brain, TrendingUp, AlertTriangle, Info, RefreshCw } from 'lucide-react';
 import DashboardLayout from '../components/DashboardLayout';
 import { useAuth } from '../context/AuthContext';
+import { API_BASE, authHeaders, safeJson } from '../api/base';
 
 const TYPE_CONFIG = {
   positive: {
@@ -91,15 +92,10 @@ function Insights() {
     setLoading(true);
     setError('');
     try {
-      const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
-      const res = await fetch('http://localhost:5000/api/ai/correlations', {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ goal_id: goalId }),
-      });
-      const data = await res.json();
-      if (data.error) throw new Error(data.error);
-      setInsights(data.insights || []);
+      const res = await fetch(`${API_BASE}/ai/insights?goal_id=${goalId}`, { headers: authHeaders(token) });
+      if (res.status === 401) { logout(); navigate('/login'); return; }
+      const data = await safeJson(res);
+      setInsights(data?.insights || []);
     } catch (err) {
       setError('Could not load insights. Make sure the backend is running.');
     } finally {
@@ -108,37 +104,26 @@ function Insights() {
   };
 
   useEffect(() => {
-    const goalId_raw = localStorage.getItem('growthpath_goal_id');
-    if (!goalId_raw) { navigate('/setup'); return; }
-    let goalId = goalId_raw;
-
     const init = async () => {
       try {
-        const headers = { Authorization: `Bearer ${token}` };
-        let goalRes = await fetch(`http://localhost:5000/api/goals/${goalId}`, { headers });
-
-        if (goalRes.status === 401) { logout(); navigate('/login'); return; }
-
-        if (!goalRes.ok) {
-          const listRes = await fetch('http://localhost:5000/api/goals', { headers });
-          const userGoals = await listRes.json();
-          if (userGoals.length > 0) {
-            goalId = userGoals[0].id;
-            localStorage.setItem('growthpath_goal_id', goalId);
-            goalRes = await fetch(`http://localhost:5000/api/goals/${goalId}`, { headers });
-          } else {
-            navigate('/setup');
-            return;
-          }
-        }
-        setGoal(await goalRes.json());
-        await fetchInsights(goalId);
+        const headers = authHeaders(token);
+        const goalsRes = await fetch(`${API_BASE}/goals`, { headers });
+        if (goalsRes.status === 401) { logout(); navigate('/login'); return; }
+        const goalsPayload = await safeJson(goalsRes);
+        const goals = goalsPayload?.goals || [];
+        const active = goalsPayload?.active_goal_id;
+        const stored = localStorage.getItem('growthpath_goal_id');
+        const selected = goals.find(g => String(g.id) === String(stored)) || goals.find(g => String(g.id) === String(active)) || goals[0] || null;
+        if (!selected) { navigate('/setup'); return; }
+        localStorage.setItem('growthpath_goal_id', String(selected.id));
+        setGoal(selected);
+        await fetchInsights(selected.id);
       } catch {
         navigate('/setup');
       }
     };
     init();
-  }, [token, navigate]);
+  }, [token, navigate, logout]);
 
   return (
     <DashboardLayout goal={goal}>

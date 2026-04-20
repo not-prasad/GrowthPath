@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Target } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { API_BASE, apiErrorMessage, safeJson } from '../api/base';
 
 function Register() {
   const [email, setEmail] = useState('');
@@ -24,19 +25,19 @@ function Register() {
     setLoading(true);
 
     try {
-      const response = await fetch('http://localhost:5000/api/register', {
+      const response = await fetch(`${API_BASE}/auth/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
       });
 
-      const data = await response.json();
+      const data = await safeJson(response);
 
       if (response.ok) {
         login(data.user, data.token);
         navigate('/setup');
       } else {
-        setError(data.error || 'Registration failed');
+        setError(apiErrorMessage(data, 'Registration failed'));
       }
     } catch (err) {
       console.error('Registration fetch error:', err);

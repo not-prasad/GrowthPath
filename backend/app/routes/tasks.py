@@ -1,0 +1,104 @@
+from __future__ import annotations
+
+import hashlib
+from datetime import datetime
+from typing import Any, Dict, Optional
+
+from flask import Blueprint, jsonify, request
+from flask_jwt_extended import get_jwt_identity, jwt_required
+
+from ..database import execute, query_one
+from ..utils.errors import ApiError
+from ..utils.validation import as_bool, as_date_yyyy_mm_dd, as_enum, as_str, require_json
+from .logs import _resolve_goal_id
+
+
+bp = Blueprint("tasks", __name__, url_prefix="/api")
+
+
+def _dedupe_key(task_type: str, title: str) -> str:
+    s = f"{task_type.strip().lower()}|{title.strip().lower()}"
+    return hashlib.sha256(s.encode("utf-8")).hexdigest()[:24]
+
+
+def _ensure_log(user_id: int, goal_id: int, log_date: str) -> int:
+    row = query_one(
+        "SELECT id FROM daily_logs WHERE user_id=? AND goal_id=? AND log_date=?",
+        (user_id, goal_id, log_date),
+    )
+    if row:
+        return int(row["id"])
+    # Create shell log row; score computed when /api/logs POST is called (or later recalculated).
+    return execute(
+        "INSERT INTO daily_logs(user_id, goal_id, log_date) VALUES (?,?,?)",
+        (user_id, goal_id, log_date),
+    )
+
+
+@bp.post("/tasks/custom")
+@jwt_required()
+def add_custom_task():
+    """
+    Adds a planned protocol task for a given goal+date.
+    Prevents duplicates via (log_id, dedupe_key).
+    """
+    user_id = int(get_jwt_identity())
+    data = require_json(request)
+
+    goal_id = _resolve_goal_id(user_id, str(data.get("goal_id")) if data.get("goal_id") is not None else None)
+    log_date = as_date_yyyy_mm_dd(data.get("log_date"), field="log_date")
+    task_type = as_enum(data.get("task_type", "custom"), field="task_type", allowed=("primary", "support", "optimize", "custom"), default="custom")
+    title = as_str(data.get("title"), field="title", min_len=2, max_len=300)
+    details = data.get("details")
+    if details is not None:
+        details = as_str(details, field="details", min_len=0, max_len=2000)
+    is_completed = as_bool(data.get("is_completed", False), field="is_completed", default=False)
+
+    log_id = _ensure_log(user_id, goal_id, log_date)
+    key = _dedupe_key(task_type, title)
+
+    now = datetime.utcnow().isoformat()
+    task_id = execute(
+        """
+        INSERT INTO daily_tasks(user_id, goal_id, log_id, log_date, task_type, title, details, is_completed, completed_at, dedupe_key)
+        VALUES (?,?,?,?,?,?,?,?,?,?)
+        """,
+        (
+            user_id,
+            goal_id,
+            log_id,
+            log_date,
+            task_type,
+            title,
+            details,
+            1 if is_completed else 0,
+            now if is_completed else None,
+            key,
+        ),
+    )
+
+    task = query_one("SELECT * FROM daily_tasks WHERE id = ?", (task_id,))
+    return jsonify({"task": task}), 201
+
+
+@bp.put("/tasks/<int:task_id>/toggle")
+@jwt_required()
+def toggle_task(task_id: int):
+    """
+    Toggle completion status for a daily_task owned by the current user.
+    """
+    user_id = int(get_jwt_identity())
+    row = query_one("SELECT id, is_completed FROM daily_tasks WHERE id=? AND user_id=?", (task_id, user_id))
+    if not row:
+        raise ApiError("not_found", "Task not found.", 404)
+
+    is_completed = 0 if int(row.get("is_completed", 0) or 0) == 1 else 1
+    completed_at = datetime.utcnow().isoformat() if is_completed == 1 else None
+
+    execute(
+        "UPDATE daily_tasks SET is_completed=?, completed_at=?, updated_at=datetime('now') WHERE id=? AND user_id=?",
+        (is_completed, completed_at, task_id, user_id),
+    )
+    task = query_one("SELECT * FROM daily_tasks WHERE id = ?", (task_id,))
+    return jsonify({"task": task}), 200
+

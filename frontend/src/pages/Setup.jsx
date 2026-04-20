@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Target, ArrowRight } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { API_BASE, apiErrorMessage, authHeaders, safeJson } from '../api/base';
 
 function Setup() {
   const navigate = useNavigate();
@@ -29,24 +30,33 @@ function Setup() {
     setLoading(true);
     
     try {
-      const response = await fetch('http://localhost:5000/api/goals', {
+      const payload = {
+        title: formData.title,
+        deadline_days: Number(formData.deadline || 30),
+        commitment: formData.commitment,
+        difficulty: formData.difficulty,
+        motivation: formData.motivation,
+        set_active: true,
+      };
+      const response = await fetch(`${API_BASE}/goals`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
+          ...authHeaders(token),
         },
-        body: JSON.stringify(formData),
+        body: JSON.stringify(payload),
       });
       
-      const data = await response.json();
+      const data = await safeJson(response);
       
       if (response.status === 401) { logout(); navigate('/login'); return; }
 
       if (response.ok) {
-        localStorage.setItem('growthpath_goal_id', data.goal_id);
+        const goalId = data?.goal?.id;
+        if (goalId) localStorage.setItem('growthpath_goal_id', String(goalId));
         navigate('/dashboard');
       } else {
-        alert(data.error || 'Failed to create goal.');
+        alert(apiErrorMessage(data, 'Failed to create goal.'));
       }
     } catch (error) {
       console.error('Error connecting to backend:', error);
@@ -69,34 +79,40 @@ function Setup() {
           }}>
             <Target size={28} color="#fff" />
           </div>
-          <h1 style={{ fontSize: '2.5rem', fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.025em', lineHeight: 1.1, marginBottom: '1.5rem' }}>
-            Transform Idea <br/> To Action.
+          <h1 style={{ fontSize: '2.25rem', fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.03em', lineHeight: 1.1, marginBottom: '1.25rem' }}>
+            Initialize <br />New Experiment.
           </h1>
-          <p style={{ color: 'var(--text-secondary)', fontSize: '1.125rem', lineHeight: 1.6, marginBottom: '2.5rem' }}>
-            Define what you want to achieve, break it down, and build the environment you need to succeed.
+          <p style={{ color: 'var(--text-secondary)', fontSize: '1rem', lineHeight: 1.7, marginBottom: '2.5rem' }}>
+            Define the target variable, set a measurable timeline,
+            and generate a structured execution roadmap.
           </p>
           
           <div style={{ 
-            padding: '1.5rem', background: 'var(--panel-bg)', border: '1px solid var(--panel-border)', borderRadius: '12px', 
-            boxShadow: 'var(--card-shadow)', fontStyle: 'italic', color: 'var(--text-secondary)' 
+            padding: '1.25rem 1.5rem', background: 'var(--panel-bg)', border: '1px solid var(--panel-border)', borderRadius: '10px', 
+            boxShadow: 'var(--card-shadow)'
           }}>
-            "A goal without a timeline is just a dream."
+            <p style={{ fontSize: '0.6rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '0.5rem' }}>System Note</p>
+            <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+              The AI roadmap will generate 3 structured milestones per day
+              calibrated to your commitment and difficulty inputs.
+            </p>
           </div>
         </div>
       </div>
 
       <div className="setup-right">
         <div style={{ width: '100%', maxWidth: '580px' }}>
-          <h2 style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '2rem' }}>Architect Your Next Goal</h2>
+          <p style={{ fontSize: '0.625rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: '0.5rem' }}>Performance Lab</p>
+          <h2 style={{ fontSize: '1.375rem', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '2rem', letterSpacing: '-0.02em' }}>Define Experiment Parameters</h2>
           
           <form onSubmit={handleSubmit}>
             <div className="form-group">
-              <label>What's your goal?</label>
+              <label>Objective</label>
               <input 
                 type="text" 
                 name="title" 
                 className="form-control" 
-                placeholder="e.g. Meditate for 100 days"
+                placeholder="e.g. Build a daily meditation habit for 60 days"
                 value={formData.title}
                 onChange={handleChange}
                 required 
@@ -105,7 +121,7 @@ function Setup() {
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
               <div className="form-group">
-                <label>Deadline (Days)</label>
+                <label>Duration (Days)</label>
                 <input 
                   type="number" 
                   name="deadline" 
@@ -119,7 +135,7 @@ function Setup() {
               </div>
 
               <div className="form-group">
-                <label>Difficulty</label>
+                <label>Difficulty Variable</label>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.5rem' }}>
                   {difficulties.map(diff => (
                     <div 
@@ -136,12 +152,12 @@ function Setup() {
             </div>
 
             <div className="form-group">
-              <label>Daily Commitment</label>
+              <label>Daily Time Commitment</label>
               <input 
                 type="text" 
                 name="commitment" 
                 className="form-control" 
-                placeholder="e.g. 15 mins daily, Code 1 hour"
+                placeholder="e.g. 30 mins, 1 hour of focused work"
                 value={formData.commitment}
                 onChange={handleChange}
                 required 
@@ -149,11 +165,11 @@ function Setup() {
             </div>
 
             <div className="form-group">
-              <label>Motivation (Optional)</label>
+              <label>Baseline Context <span style={{ fontWeight: 400, color: 'var(--text-muted)', fontSize: '0.8rem' }}>(optional)</span></label>
               <textarea 
                 name="motivation" 
                 className="form-control" 
-                placeholder="Why is achieving this important to you?"
+                placeholder="Why this objective? Any relevant context for the AI roadmap..."
                 value={formData.motivation}
                 onChange={handleChange}
                 style={{ minHeight: '80px' }}
@@ -161,7 +177,7 @@ function Setup() {
             </div>
 
             <button type="submit" disabled={loading} className="btn btn-primary" style={{ width: '100%', padding: '0.875rem' }}>
-              {loading ? 'Architecting AI Plan...' : 'Generate My Plan'} <ArrowRight size={18} style={{ marginLeft: '0.5rem' }} />
+              {loading ? 'Generating Roadmap...' : 'Initialize Experiment'} <ArrowRight size={18} style={{ marginLeft: '0.5rem' }} />
             </button>
           </form>
         </div>

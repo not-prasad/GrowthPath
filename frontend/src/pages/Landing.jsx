@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowRight, Target, CalendarDays, BrainCircuit, ShieldCheck, Zap } from 'lucide-react';
+import { ArrowRight, Target, BarChart2, FlaskConical, Zap, Activity } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 function Landing() {
@@ -8,126 +8,129 @@ function Landing() {
   const { token } = useAuth();
 
   useEffect(() => {
-    if (token) {
-      navigate('/dashboard');
-    }
+    if (token) navigate('/dashboard');
   }, [token, navigate]);
 
+  const features = [
+    {
+      icon: <FlaskConical size={22} color="var(--accent-primary)" />,
+      title: 'Structured Experiment Design',
+      desc: 'Define a measurable objective, set a duration, and calibrate a difficulty variable. The AI generates a structured execution roadmap with daily milestones.',
+    },
+    {
+      icon: <BarChart2 size={22} color="var(--accent-primary)" />,
+      title: 'Performance Scoring Engine',
+      desc: 'Every Daily Log is processed through a scoring model: completion weight, focus normalization, and friction penalty — producing a 0–100 performance score.',
+    },
+    {
+      icon: <Activity size={22} color="var(--accent-primary)" />,
+      title: 'Behavioral Analytics',
+      desc: 'Track energy states, focus levels, and friction variables over time. The AI analyst surface trends, deviations, and actionable observations based on your data.',
+    },
+  ];
+
   return (
-    <div className="fade-in" style={{ background: 'var(--bg-color)' }}>
-      {/* Navigation Bar */}
-      <nav style={{ 
-        padding: '1.5rem 2rem', borderBottom: '1px solid var(--panel-border)', 
-        display: 'flex', justifyContent: 'space-between', alignItems: 'center' 
+    <div className="fade-in" style={{ background: 'var(--bg-color)', minHeight: '100vh' }}>
+
+      {/* Nav */}
+      <nav style={{
+        padding: '1.25rem 2.5rem', borderBottom: '1px solid var(--panel-border)',
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+        position: 'sticky', top: 0, background: 'var(--bg-color)', zIndex: 100,
+        backdropFilter: 'blur(8px)',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}>
-          <div style={{ 
-            width: '32px', height: '32px', background: 'var(--accent-primary)', borderRadius: '8px', 
-            display: 'flex', alignItems: 'center', justifyContent: 'center'
-          }}>
-            <Target size={20} color="#fff" />
+          <div style={{ width: '30px', height: '30px', background: 'var(--accent-primary)', borderRadius: '7px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Target size={18} color="#fff" />
           </div>
-          <span style={{ fontSize: '1.125rem', fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>GrowthPath</span>
+          <span style={{ fontSize: '1rem', fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>Perf. Lab</span>
         </div>
-        <div style={{ display: 'flex', gap: '1rem' }}>
-          <button onClick={() => navigate('/login')} className="btn btn-outline" style={{ border: 'none' }}>Login</button>
-          <button onClick={() => navigate('/register')} className="btn btn-primary">Get Started</button>
+        <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+          <button onClick={() => navigate('/login')} className="btn btn-outline" style={{ border: 'none', fontSize: '0.875rem', padding: '0.5rem 1rem' }}>Log in</button>
+          <button onClick={() => navigate('/register')} className="btn btn-primary" style={{ fontSize: '0.875rem', padding: '0.5rem 1.125rem' }}>Get Access</button>
         </div>
       </nav>
 
-      {/* Hero Section */}
-      <div className="hero-section" style={{ padding: '8rem 2rem 6rem', minHeight: 'auto' }}>
-        <div style={{ 
-          display: 'inline-flex', alignItems: 'center', gap: '0.5rem', 
-          background: 'var(--accent-subtle)', border: '1px solid var(--accent-border)', padding: '0.35rem 0.75rem', 
-          borderRadius: '999px', color: 'var(--accent-primary)', fontSize: '0.75rem', fontWeight: 700, 
-          textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '2rem'
+      {/* Hero */}
+      <div style={{ padding: '9rem 2rem 7rem', textAlign: 'center', maxWidth: '860px', margin: '0 auto' }}>
+        <div style={{
+          display: 'inline-flex', alignItems: 'center', gap: '0.5rem',
+          background: 'var(--accent-subtle)', border: '1px solid var(--accent-border)',
+          padding: '0.3rem 0.875rem', borderRadius: '999px',
+          color: 'var(--accent-primary)', fontSize: '0.7rem', fontWeight: 700,
+          textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '2.25rem'
         }}>
-          <Zap size={14} /> Refined personal growth tracking
+          <Zap size={12} /> Behavioral Analytics System
         </div>
-        <h1 style={{ 
-          fontSize: '4.5rem', fontWeight: 800, color: 'var(--text-primary)', 
-          letterSpacing: '-0.04em', lineHeight: 1.05, textAlign: 'center', maxWidth: '900px'
+
+        <h1 style={{
+          fontSize: '4.25rem', fontWeight: 800, color: 'var(--text-primary)',
+          letterSpacing: '-0.045em', lineHeight: 1.05, marginBottom: '1.75rem'
         }}>
-          Engineered for your <span className="text-gradient">consistent progress.</span>
+          Your Personal <span className="text-gradient">Performance Lab.</span>
         </h1>
-        <p style={{ 
-          color: 'var(--text-secondary)', fontSize: '1.25rem', marginTop: '1.5rem', 
-          textAlign: 'center', maxWidth: '600px', lineHeight: 1.6
+
+        <p style={{
+          color: 'var(--text-secondary)', fontSize: '1.125rem',
+          lineHeight: 1.7, maxWidth: '560px', margin: '0 auto 3rem',
         }}>
-          A clean, professional tool to architect your goals, track daily habits, and visualize your evolution through AI-powered analysis.
+          A structured, data-driven system for behavioral self-optimization.
+          Log performance variables, track trends, and receive AI-generated analytical observations.
         </p>
 
-        <div style={{ display: 'flex', gap: '1rem', marginTop: '3rem' }}>
-          <button className="btn btn-primary" onClick={() => navigate('/register')} style={{ padding: '1rem 2.5rem', fontSize: '1.125rem' }}>
-            Start Journey Now <ArrowRight size={20} style={{ marginLeft: '0.5rem' }} />
+        <div style={{ display: 'flex', gap: '0.875rem', justifyContent: 'center', flexWrap: 'wrap' }}>
+          <button className="btn btn-primary" onClick={() => navigate('/register')} style={{ padding: '0.875rem 2.25rem', fontSize: '1rem' }}>
+            Initialize Lab <ArrowRight size={18} style={{ marginLeft: '0.5rem' }} />
           </button>
-          <button className="btn btn-outline" onClick={() => navigate('/login')} style={{ padding: '1rem 2.5rem', fontSize: '1.125rem' }}>
-            View Demo Dashboard
+          <button className="btn btn-outline" onClick={() => navigate('/login')} style={{ padding: '0.875rem 2.25rem', fontSize: '1rem' }}>
+            Sign In
           </button>
         </div>
       </div>
 
-      {/* Social Proof / Trust Bar */}
-      <div style={{ 
-        padding: '3rem 2rem', display: 'flex', justifyContent: 'center', 
-        alignItems: 'center', background: 'var(--bg-color)', borderBlock: '1px solid var(--panel-border)' 
+      {/* Trust Bar */}
+      <div style={{
+        padding: '2rem 2rem', display: 'flex', justifyContent: 'center',
+        borderBlock: '1px solid var(--panel-border)', background: 'var(--panel-bg)'
       }}>
-        <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.1em' }}>
-          Built for professionals who value growth
+        <p style={{ color: 'var(--text-muted)', fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.12em' }}>
+          Built for professionals who optimize performance through data
         </p>
       </div>
 
-      {/* Features Grid */}
-      <div style={{ padding: '8rem 2rem', maxWidth: '1200px', margin: '0 auto' }}>
-        <div className="grid-3-cols" style={{ gap: '2.5rem' }}>
-          <div>
-            <div style={{ 
-              width: '42px', height: '42px', background: 'var(--accent-subtle)', borderRadius: '12px', 
-              display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '1.5rem'
-            }}>
-              <Target size={24} color="var(--accent-primary)" />
+      {/* Features */}
+      <div style={{ padding: '7rem 2rem', maxWidth: '1100px', margin: '0 auto' }}>
+        <p style={{ fontSize: '0.65rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.12em', textAlign: 'center', marginBottom: '0.75rem' }}>System Capabilities</p>
+        <h2 style={{ fontSize: '2rem', fontWeight: 800, color: 'var(--text-primary)', textAlign: 'center', letterSpacing: '-0.03em', marginBottom: '4rem' }}>What the lab tracks</h2>
+
+        <div className="grid-3-cols" style={{ gap: '2rem' }}>
+          {features.map((f, i) => (
+            <div key={i} className="card" style={{ padding: '2rem' }}>
+              <div style={{
+                width: '40px', height: '40px', background: 'var(--accent-subtle)',
+                borderRadius: '10px', display: 'flex', alignItems: 'center',
+                justifyContent: 'center', marginBottom: '1.25rem'
+              }}>
+                {f.icon}
+              </div>
+              <h3 style={{ fontSize: '1.0625rem', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '0.625rem', letterSpacing: '-0.01em' }}>{f.title}</h3>
+              <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', lineHeight: 1.65 }}>{f.desc}</p>
             </div>
-            <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '0.75rem' }}>Strategic Setup</h3>
-            <p style={{ color: 'var(--text-secondary)', fontSize: '1rem', lineHeight: 1.6 }}>
-              Define goals with precision. Categorize your health, study, and skills with clear deadlines and commitment targets.
-            </p>
-          </div>
-          <div>
-            <div style={{ 
-              width: '42px', height: '42px', background: 'var(--accent-subtle)', borderRadius: '12px', 
-              display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '1.5rem'
-            }}>
-              <CalendarDays size={24} color="var(--accent-primary)" />
-            </div>
-            <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '0.75rem' }}>Daily Consistency</h3>
-            <p style={{ color: 'var(--text-secondary)', fontSize: '1rem', lineHeight: 1.6 }}>
-              Track daily logs, mood, and focus levels. Build momentum using our streak mechanics designed for long-term consistency.
-            </p>
-          </div>
-          <div>
-            <div style={{ 
-              width: '42px', height: '42px', background: 'var(--accent-subtle)', borderRadius: '12px', 
-              display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '1.5rem'
-            }}>
-              <Zap size={24} color="var(--accent-primary)" />
-            </div>
-            <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '0.75rem' }}>AI Guidance</h3>
-            <p style={{ color: 'var(--text-secondary)', fontSize: '1rem', lineHeight: 1.6 }}>
-              Leverage personalized AI plans and nudges to stay motivated. Data-driven insights to help you understand your patterns.
-            </p>
-          </div>
+          ))}
         </div>
       </div>
 
-      {/* Footer-like CTA */}
-      <div style={{ padding: '6rem 2rem', background: '#0f172n', textAlign: 'center' }}>
-        <h2 style={{ fontSize: '2.5rem', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '1.5rem' }}>Ready to start your growth journey?</h2>
-        <p style={{ color: 'var(--text-muted)', fontSize: '1.125rem', marginBottom: '2.5rem', maxWidth: '500px', margin: '1.5rem auto' }}>
-          Join others who are architecting their future with precision and data.
+      {/* CTA Footer */}
+      <div style={{ padding: '6rem 2rem', textAlign: 'center', borderTop: '1px solid var(--panel-border)' }}>
+        <p style={{ fontSize: '0.65rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: '1rem' }}>Ready to start?</p>
+        <h2 style={{ fontSize: '2.25rem', fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.03em', marginBottom: '1rem' }}>
+          Initialize your first experiment.
+        </h2>
+        <p style={{ color: 'var(--text-secondary)', fontSize: '1rem', maxWidth: '420px', margin: '0 auto 2.5rem', lineHeight: 1.6 }}>
+          Free to use. No subscriptions. Structured performance tracking, not gamified habits.
         </p>
-        <button className="btn btn-primary" onClick={() => navigate('/register')} style={{ padding: '1rem 3rem' }}>
-          Create Free Account
+        <button className="btn btn-primary" onClick={() => navigate('/register')} style={{ padding: '0.875rem 2.5rem', fontSize: '1rem' }}>
+          Create Account <ArrowRight size={18} style={{ marginLeft: '0.5rem' }} />
         </button>
       </div>
     </div>

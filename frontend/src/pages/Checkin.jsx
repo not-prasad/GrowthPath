@@ -61,17 +61,18 @@ function Checkin() {
     playSound('https://www.soundjay.com/misc/sounds/paper-flick-1.mp3');
     const goalId = localStorage.getItem('growthpath_goal_id');
     try {
+      const energyMap = { 'Happy 😊': 'High', 'Neutral 😐': 'Stable', 'Stressed 😞': 'Low', 'Tired 😴': 'Low' };
       const response = await fetch('http://localhost:5000/api/logs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({
           goal_id: goalId,
           todo_id: context?.todo?.id, 
-          task_done: taskDone,
-          mood,
+          objective_status: taskDone ? 'Completed' : 'Missed',
+          energy_state: energyMap[mood] || 'Stable',
           focus_level: focusLevel,
-          notes,
-          hurdles: selectedHurdles.join(', ')
+          notes: notes,
+          friction_vars: selectedHurdles
         }),
       });
       if (response.ok) {
@@ -135,6 +136,27 @@ function Checkin() {
             </div>
           </div>
 
+          <div className="journal-entry-line" style={{ animationDelay: '0.3s' }}>
+            <p>Rate your <span style={{ fontWeight: 700 }}>Focus Intensity</span> during this attempt:</p>
+            <div style={{ marginTop: '1rem', display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+              {[1, 2, 3, 4, 5].map(level => (
+                <button
+                  key={level}
+                  onClick={() => { setFocusLevel(level); playSound('https://www.soundjay.com/buttons/sounds/button-16.mp3'); }}
+                  style={{
+                    width: '40px', height: '10px', borderRadius: '2px', border: 'none', cursor: 'pointer',
+                    background: focusLevel >= level ? 'var(--accent-primary)' : '#e2e8f0',
+                    transition: 'all 0.2s', opacity: focusLevel >= level ? 1 : 0.5
+                  }}
+                  title={`Level ${level}`}
+                />
+              ))}
+              <span style={{ marginLeft: '0.5rem', fontSize: '0.875rem', fontWeight: 700, color: 'var(--text-muted)' }}>
+                {focusLevel}/5
+              </span>
+            </div>
+          </div>
+
           {!taskDone && (
             <div className="journal-entry-line" style={{ animationDelay: '0.4s' }}>
               <p>The resistance was primarily due to:</p>
@@ -167,22 +189,25 @@ function Checkin() {
             />
           </div>
 
-          <div style={{ marginTop: '3rem', textAlign: 'center' }}>
+          <div style={{ marginTop: '3rem', paddingBottom: '6rem', textAlign: 'center' }}>
             {submitted ? (
-              <div style={{ color: '#10b981', animation: 'fadeIn 0.5s' }}>
-                <CheckCircle size={40} style={{ marginBottom: '1rem' }} />
-                <p style={{ fontWeight: 700 }}>Entry recorded. Until tomorrow, Architect.</p>
+              <div style={{ color: '#10b981', animation: 'fadeIn 0.5s', padding: '2rem' }}>
+                <CheckCircle size={48} style={{ marginBottom: '1rem' }} />
+                <p style={{ fontWeight: 800, fontSize: '1.25rem' }}>Entry Sealed.</p>
+                <p style={{ color: 'var(--text-secondary)' }}>Until tomorrow, Architect.</p>
               </div>
             ) : (
               <button 
+                id="seal-entry-btn"
                 disabled={submitting} onClick={handleFinish}
                 style={{ 
-                  background: '#2c3e50', color: '#fdfcf0', border: 'none', padding: '1rem 3.5rem', 
-                  borderRadius: '4px', fontSize: '1rem', cursor: 'pointer', transition: 'all 0.2s',
-                  display: 'inline-flex', alignItems: 'center', gap: '0.75rem'
+                  background: 'var(--text-primary)', color: 'var(--bg-color)', border: 'none', padding: '1.125rem 4rem', 
+                  borderRadius: '12px', fontSize: '1.125rem', fontWeight: 800, cursor: 'pointer', transition: 'all 0.2s',
+                  display: 'inline-flex', alignItems: 'center', gap: '0.75rem',
+                  boxShadow: '0 8px 32px rgba(0,0,0,0.2)'
                 }}
               >
-                {submitting ? 'Archiving...' : <><Feather size={18} /> Seal Entry</>}
+                {submitting ? 'Archiving...' : <><Feather size={20} /> Seal Entry</>}
               </button>
             )}
           </div>

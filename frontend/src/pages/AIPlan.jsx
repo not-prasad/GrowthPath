@@ -1,190 +1,72 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Sparkles, BookOpen, Check, AlertTriangle } from 'lucide-react';
+import { 
+  Sparkles, 
+  Check, 
+  AlertTriangle, 
+  ChevronDown, 
+  ChevronRight, 
+  Activity, 
+  Zap, 
+  Plus, 
+  Lock,
+  Clock,
+  Target,
+  BarChart2,
+  MoreVertical
+} from 'lucide-react';
 import DashboardLayout from '../components/DashboardLayout';
 import { useAuth } from '../context/AuthContext';
 
+const CATEGORY_STYLES = {
+  primary: {
+    color: 'var(--accent-primary)',
+    bg: 'rgba(99, 102, 241, 0.1)',
+    label: 'Primary Objective',
+    icon: <Target size={14} />,
+    weight: '50%'
+  },
+  support: {
+    color: '#38bdf8',
+    bg: 'rgba(56, 189, 248, 0.1)',
+    label: 'Support Variable',
+    icon: <Activity size={14} />,
+    weight: '25%'
+  },
+  optimize: {
+    color: '#34d399',
+    bg: 'rgba(52, 211, 153, 0.1)',
+    label: 'Optimization Task',
+    icon: <Zap size={14} />,
+    weight: '15%'
+  }
+};
+
 function AIPlan() {
-  const [goal, setGoal] = useState(null);
-  const [todos, setTodos] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const { token, logout } = useAuth();
+  const [loading, setLoading] = useState(false);
+  const { token } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
-    const goalId_raw = localStorage.getItem('growthpath_goal_id');
-    if (!goalId_raw) { navigate('/setup'); return; }
-    let goalId = goalId_raw;
-
-    const fetchData = async () => {
-      try {
-        const headers = { 'Authorization': `Bearer ${token}` };
-        let goalRes = await fetch(`http://localhost:5000/api/goals/${goalId}`, { headers });
-        
-        if (goalRes.status === 401) { logout(); navigate('/login'); return; }
-
-        if (!goalRes.ok) {
-          const listRes = await fetch('http://localhost:5000/api/goals', { headers });
-          const userGoals = await listRes.json();
-          if (userGoals.length > 0) {
-            goalId = userGoals[0].id;
-            localStorage.setItem('growthpath_goal_id', goalId);
-            goalRes = await fetch(`http://localhost:5000/api/goals/${goalId}`, { headers });
-          } else {
-            navigate('/setup');
-            return;
-          }
-        }
-        
-        setGoal(await goalRes.json());
-        
-        const todosRes = await fetch(`http://localhost:5000/api/goals/${goalId}/todos`, { headers });
-        if (!todosRes.ok) throw new Error('Failed to load tasks');
-        
-        const todosData = await todosRes.json();
-        setTodos(todosData);
-        
-      } catch (err) {
-        console.error(err);
-        setError(err.message || 'Failed to generate plan.');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchData();
-  }, [token, navigate]);
-
-  const toggleTodo = async (todoId) => {
-    // Optimistic update
-    setTodos(prev => prev.map(t => t.id === todoId ? { ...t, is_completed: !t.is_completed } : t));
-    
-    try {
-      await fetch(`http://localhost:5000/api/todos/${todoId}/toggle`, {
-        method: 'PUT',
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-    } catch (err) {
-      console.error(err);
-      // Revert on error
-      setTodos(prev => prev.map(t => t.id === todoId ? { ...t, is_completed: !t.is_completed } : t));
-      alert('Failed to update task');
-    }
-  };
-
-  if (!goal) return null;
-
-  const completedCount = todos.filter(t => t.is_completed).length;
-  const progress = todos.length > 0 ? Math.round((completedCount / todos.length) * 100) : 0;
+    // v2 backend does not implement roadmap/todos endpoints.
+  }, [token, navigate, logout]);
 
   return (
-    <DashboardLayout goal={goal}>
-      <div style={{ marginBottom: '2.5rem', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
-        <div>
-          <h1 style={{ fontSize: '1.875rem', fontWeight: 800, marginBottom: '0.25rem' }}>AI Action Plan</h1>
-          <p style={{ color: 'var(--text-secondary)', fontSize: '0.9375rem' }}>
-            A tailored day-by-day checklist designed for <span style={{ color: 'var(--accent-primary)', fontWeight: 600 }}>{goal.title}</span>.
+    <DashboardLayout goal={null}>
+      <div style={{ maxWidth: 720 }}>
+        <h1 style={{ fontSize: '1.75rem', fontWeight: 900, marginBottom: '0.5rem' }}>AI Roadmap</h1>
+        <p style={{ color: 'var(--text-secondary)', marginBottom: '1.5rem' }}>
+          In v2, tasks are modeled as `daily_tasks` per date. The legacy roadmap/todos endpoints are intentionally not available.
+        </p>
+        <div className="card" style={{ padding: '1.25rem' }}>
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem', lineHeight: 1.6 }}>
+            Use <strong>Run Daily Log</strong> to add tasks for today via <code>POST /api/tasks/custom</code>, then submit the daily summary via <code>POST /api/logs</code>.
           </p>
+          <button className="btn btn-primary" style={{ marginTop: '1rem' }} onClick={() => navigate('/log')}>
+            Go to Daily Log
+          </button>
         </div>
-        
-        {todos.length > 0 && (
-          <div style={{ textAlign: 'right' }}>
-            <div style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--text-primary)' }}>
-              {progress}%
-            </div>
-            <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.05em' }}>
-              Completion
-            </div>
-          </div>
-        )}
       </div>
-
-      {loading ? (
-        <div className="card" style={{ padding: '6rem 2rem', textAlign: 'center' }}>
-          <div style={{ 
-            width: '48px', height: '48px', border: '3px solid var(--panel-border)', borderTopColor: 'var(--accent-primary)', 
-            borderRadius: '50%', animation: 'spin 1s linear infinite', margin: '0 auto 1.5rem' 
-          }}></div>
-          <h3 style={{ fontSize: '1.125rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '0.5rem' }}>Loading your roadmap</h3>
-          <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', maxWidth: '300px', margin: '0 auto' }}>
-            Pulling your auto-generated checklist based on the deadline context.
-          </p>
-        </div>
-      ) : error ? (
-        <div style={{ background: '#fef2f2', border: '1px solid #fee2e2', borderRadius: '12px', padding: '2rem', display: 'flex', gap: '1rem' }}>
-          <AlertTriangle color="#ef4444" size={24} />
-          <div>
-            <h3 style={{ fontSize: '1rem', fontWeight: 700, color: '#991b1b', marginBottom: '0.5rem' }}>Generation Error</h3>
-            <p style={{ fontSize: '0.875rem', color: '#b91c1c' }}>{error}</p>
-          </div>
-        </div>
-      ) : (
-        <div className="card" style={{ padding: '2rem', maxWidth: '800px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem', paddingBottom: '1.5rem', borderBottom: '1px solid var(--panel-border)', marginBottom: '1.5rem' }}>
-            <BookOpen size={20} color="var(--accent-primary)" />
-            <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--accent-primary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-              Generated Tasks ({todos.length})
-            </span>
-          </div>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-            {todos.map(todo => (
-              <div 
-                key={todo.id}
-                onClick={() => toggleTodo(todo.id)}
-                style={{
-                  display: 'flex', alignItems: 'flex-start', gap: '1rem', padding: '1.25rem',
-                  background: todo.is_completed ? 'var(--accent-subtle)' : 'var(--input-bg)',
-                  border: todo.is_completed ? '1px solid var(--accent-border)' : '1px solid var(--panel-border)',
-                  borderRadius: '12px', cursor: 'pointer', transition: 'all 0.15s ease',
-                  opacity: todo.is_completed ? 0.7 : 1
-                }}
-              >
-                <div style={{
-                  width: '24px', height: '24px', borderRadius: '6px', marginTop: '2px',
-                  background: todo.is_completed ? 'var(--accent-primary)' : 'transparent',
-                  border: todo.is_completed ? '2px solid var(--accent-primary)' : '2px solid var(--panel-border)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-                  transition: 'background 0.2s'
-                }}>
-                  {todo.is_completed && <Check size={14} color="#fff" strokeWidth={3} />}
-                </div>
-                
-                <div>
-                  <div style={{
-                    fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em',
-                    color: todo.is_completed ? 'var(--accent-primary)' : 'var(--text-muted)', marginBottom: '0.25rem'
-                  }}>
-                    {todo.timeframe_label}
-                  </div>
-                  <div style={{
-                    fontSize: '0.9375rem', color: todo.is_completed ? 'var(--text-secondary)' : 'var(--text-primary)',
-                    textDecoration: todo.is_completed ? 'line-through' : 'none', lineHeight: 1.5
-                  }}>
-                    {todo.task_description}
-                  </div>
-                </div>
-              </div>
-            ))}
-            
-            {todos.length === 0 && (
-               <div style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '2rem' }}>
-                 No tasks found for this goal.
-               </div>
-            )}
-          </div>
-
-          <div style={{ 
-            marginTop: '3rem', paddingTop: '1.5rem', borderTop: '1px solid var(--panel-border)', 
-            display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-muted)', fontSize: '0.75rem' 
-          }}>
-            <Sparkles size={14} /> Driven by AI Auto-Categorization & Planning
-          </div>
-        </div>
-      )}
-
-      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </DashboardLayout>
   );
 }
