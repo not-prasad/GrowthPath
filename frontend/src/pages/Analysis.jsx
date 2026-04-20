@@ -1,101 +1,104 @@
-import React, { useEffect, useState } from 'react' ;
+import React, { useEffect, useMemo, useState } from 'react' ;
 import { useNavigate } from 'react-router-dom';
 import {
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  BarChart, Bar, Legend,
+  ScatterChart, Scatter, ZAxis,
 } from 'recharts';
-import { FileDown } from 'lucide-react';
+import { Activity, BarChart2, CalendarDays, Dot, SlidersHorizontal } from 'lucide-react';
 import DashboardLayout from '../components/DashboardLayout';
 import { useAuth } from '../context/AuthContext';
-import { generatePDF } from '../components/ExportPDF';
 import Heatmap from '../components/Heatmap';
+import { API_BASE, authHeaders, safeJson } from '../api/base';
 
 function Analysis() {
   const [goal, setGoal] = useState(null);
-  const [analysis, setAnalysis] = useState(null);
-  const [logs, setLogs] = useState([]);
-  const [streak, setStreak] = useState(0);
-  const [exporting, setExporting] = useState(false);
+  const [days, setDays] = useState([]);
+  const [line, setLine] = useState(null);
+  const [boxplot, setBoxplot] = useState(null);
+  const [categoryBar, setCategoryBar] = useState(null);
+  const [weekday, setWeekday] = useState(null);
+  const [scatterFocus, setScatterFocus] = useState(null);
+  const [scatterFriction, setScatterFriction] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [showAdvanced, setShowAdvanced] = useState({
+    line: false,
+    category: false,
+    weekday: false,
+    boxplot: false,
+    focus: false,
+    friction: false,
+  });
   const { token, logout } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
-    const goalId_raw = localStorage.getItem('growthpath_goal_id');
-    if (!goalId_raw) { navigate('/setup'); return; }
-    let goalId = goalId_raw;
-
     const fetchAll = async () => {
       try {
-        const headers = { 'Authorization': `Bearer ${token}` };
-        let goalRes = await fetch(`http://localhost:5000/api/goals/${goalId}`, { headers });
-        
-        if (goalRes.status === 401) { logout(); navigate('/login'); return; }
+        setLoading(true);
+        const headers = authHeaders(token);
 
-        if (!goalRes.ok) {
-          const listRes = await fetch('http://localhost:5000/api/goals', { headers });
-          const userGoals = await listRes.json();
-          if (userGoals.length > 0) {
-            goalId = userGoals[0].id;
-            localStorage.setItem('growthpath_goal_id', goalId);
-            goalRes = await fetch(`http://localhost:5000/api/goals/${goalId}`, { headers });
-          } else {
-            navigate('/setup');
-            return;
-          }
-        }
+        const goalsRes = await fetch(`${API_BASE}/goals`, { headers });
+        if (goalsRes.status === 401) { logout(); navigate('/login'); return; }
+        const goalsPayload = await safeJson(goalsRes);
+        const goals = goalsPayload?.goals || [];
+        const active = goalsPayload?.active_goal_id;
+        const stored = localStorage.getItem('growthpath_goal_id');
+        const selected = goals.find(g => String(g.id) === String(stored)) || goals.find(g => String(g.id) === String(active)) || goals[0] || null;
+        if (!selected) { navigate('/setup'); return; }
+        localStorage.setItem('growthpath_goal_id', String(selected.id));
+        setGoal(selected);
 
-        const [analysisRes, logsRes, streakRes] = await Promise.all([
-          fetch(`http://localhost:5000/api/analysis/${goalId}`, { headers }),
-          fetch(`http://localhost:5000/api/logs/${goalId}`, { headers }),
-          fetch(`http://localhost:5000/api/streak/${goalId}`, { headers }),
+        const goalId = selected.id;
+        const [
+          daysRes,
+          lineRes,
+          boxRes,
+          catRes,
+          wdRes,
+          sfRes,
+          sfiRes,
+        ] = await Promise.all([
+          fetch(`${API_BASE}/logs?goal_id=${goalId}&limit=365`, { headers }),
+          fetch(`${API_BASE}/analytics/line?goal_id=${goalId}`, { headers }),
+          fetch(`${API_BASE}/analytics/boxplot?goal_id=${goalId}`, { headers }),
+          fetch(`${API_BASE}/analytics/category-completion?goal_id=${goalId}`, { headers }),
+          fetch(`${API_BASE}/analytics/weekday?goal_id=${goalId}`, { headers }),
+          fetch(`${API_BASE}/analytics/scatter/focus?goal_id=${goalId}`, { headers }),
+          fetch(`${API_BASE}/analytics/scatter/friction?goal_id=${goalId}`, { headers }),
         ]);
-        
-        setGoal(await goalRes.json());
-        setAnalysis(await analysisRes.json());
-        const streakData = await streakRes.json();
-        setStreak(streakData.streak || 0);
-        const logsData = await logsRes.json();
-        setLogs([...logsData].reverse()); // chronological
+
+        const daysPayload = await safeJson(daysRes);
+        setDays(daysPayload?.days || []);
+
+        setLine((await safeJson(lineRes))?.line || null);
+        setBoxplot((await safeJson(boxRes))?.boxplot || null);
+        setCategoryBar((await safeJson(catRes))?.bar || null);
+        setWeekday((await safeJson(wdRes))?.weekday || null);
+        setScatterFocus((await safeJson(sfRes))?.scatter || null);
+        setScatterFriction((await safeJson(sfiRes))?.scatter || null);
       } catch (err) {
         console.error(err);
         // navigate('/setup');
+      } finally {
+        setLoading(false);
       }
     };
     fetchAll();
-  }, [token, navigate]);
+  }, [token, navigate, logout]);
 
-  if (!goal || !analysis) return null;
+  const heatmapLogs = useMemo(() => (
+    (days || []).map(d => ({
+      log_date: d.date,
+      task_done: (d.performance_score || 0) >= 70,
+      focus_level: d.focus_level,
+      mood: null,
+      notes: d.notes,
+    }))
+  ), [days]);
 
-  const completionRate = analysis.completion_rate || 0;
-  const avgFocus = analysis.average_focus || 0;
-  const totalDays = analysis.total_days_logged || 0;
-
-  // Mood counts
-  const moodCounts = { Happy: 0, Neutral: 0, Stressed: 0, Tired: 0 };
-  logs.forEach(log => {
-    if (log.mood?.includes('Happy')) moodCounts.Happy++;
-    else if (log.mood?.includes('Neutral')) moodCounts.Neutral++;
-    else if (log.mood?.includes('Stressed')) moodCounts.Stressed++;
-    else if (log.mood?.includes('Tired')) moodCounts.Tired++;
-  });
-
-  // Chart data
-  const chartData = logs.map(log => ({
-    date: log.log_date,
-    focus: log.focus_level,
-  }));
-
-  // Ring parameters
-  const radius = 70;
-  const circumference = 2 * Math.PI * radius;
-  const strokeDashoffset = circumference - (completionRate / 100) * circumference;
-
-  const handleExport = async () => {
-    setExporting(true);
-    try {
-      generatePDF({ goal, logs, analysis, streak });
-    } finally {
-      setTimeout(() => setExporting(false), 1500);
-    }
+  const toggleAdvanced = (key) => {
+    setShowAdvanced(prev => ({ ...prev, [key]: !prev[key] }));
   };
 
   return (
@@ -103,121 +106,78 @@ function Analysis() {
       <div style={{ marginBottom: '2.5rem', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
         <div>
           <h1 style={{ fontSize: '1.875rem', fontWeight: 800, marginBottom: '0.25rem' }}>Analysis</h1>
-          <p style={{ color: 'var(--text-secondary)', fontSize: '0.9375rem' }}>Detailed insights into your consistency and performance.</p>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '0.9375rem' }}>Visualization-ready analytics powered by v2 endpoints.</p>
         </div>
-        <button
-          id="export-pdf-btn"
-          className="btn btn-outline"
-          onClick={handleExport}
-          disabled={exporting}
-          style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexShrink: 0 }}
-        >
-          <FileDown size={15} />
-          {exporting ? 'Generating…' : 'Download Report'}
-        </button>
       </div>
 
       <div style={{ marginBottom: '1.5rem' }}>
-        <Heatmap logs={logs} />
+        <Heatmap logs={heatmapLogs} />
       </div>
 
-      {/* High-Level Stats */}
       <div className="grid-3-cols" style={{ marginBottom: '1.5rem' }}>
-
-        {/* Completion Ring */}
-        <div className="card" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '2rem' }}>
-          <p style={{ color: '#64748b', fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '1.5rem' }}>Completion Rate</p>
-          <div style={{ position: 'relative', width: 140, height: 140, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <svg width="140" height="140" viewBox="0 0 160 160">
-              <circle cx="80" cy="80" r={radius} fill="none" stroke="#f1f5f9" strokeWidth="10" />
-              <circle
-                cx="80" cy="80" r={radius}
-                fill="none"
-                stroke="#4f46e5"
-                strokeWidth="10"
-                strokeLinecap="round"
-                strokeDasharray={circumference}
-                strokeDashoffset={strokeDashoffset}
-                transform="rotate(-90 80 80)"
-                style={{ transition: 'stroke-dashoffset 1s ease' }}
-              />
-            </svg>
-            <div style={{ position: 'absolute', textAlign: 'center' }}>
-              <div style={{ fontSize: '1.75rem', fontWeight: 800, color: '#0f172a' }}>{completionRate}%</div>
-              <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 500 }}>done</div>
-            </div>
-          </div>
+        <div className="card" style={{ padding: '1.25rem' }}>
+          <p style={{ fontSize: '0.65rem', fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '0.5rem' }}>
+            <CalendarDays size={14} style={{ marginRight: 6, verticalAlign: 'middle' }} />
+            Days Loaded
+          </p>
+          <p style={{ fontSize: '2rem', fontWeight: 900, color: 'var(--text-primary)' }}>{days.length}</p>
         </div>
-
-        {/* Focus Avg */}
-        <div className="card" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', justifyContent: 'center', padding: '2rem' }}>
-          <p style={{ color: '#64748b', fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '1rem' }}>Average Focus</p>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.5rem', marginBottom: '0.5rem' }}>
-            <span style={{ fontSize: '3rem', fontWeight: 800, color: '#0f172a' }}>{avgFocus.toFixed(1)}</span>
-            <span style={{ fontSize: '1rem', color: '#64748b', fontWeight: 500 }}>/ 5</span>
-          </div>
-          <div style={{ display: 'flex', gap: '0.35rem' }}>
-            {[1,2,3,4,5].map(n => (
-              <div 
-                key={n} 
-                style={{ 
-                  width: '20px', height: '8px', borderRadius: '2px',
-                  background: n <= Math.round(avgFocus) ? '#4f46e5' : '#f1f5f9'
-                }} 
-              />
-            ))}
-          </div>
+        <div className="card" style={{ padding: '1.25rem' }}>
+          <p style={{ fontSize: '0.65rem', fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '0.5rem' }}>
+            <SlidersHorizontal size={14} style={{ marginRight: 6, verticalAlign: 'middle' }} />
+            Boxplot Median
+          </p>
+          <p style={{ fontSize: '2rem', fontWeight: 900, color: 'var(--text-primary)' }}>{boxplot?.median ?? '—'}</p>
         </div>
-
-        {/* Total Days */}
-        <div className="card" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', justifyContent: 'center', padding: '2rem' }}>
-          <p style={{ color: '#64748b', fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '1rem' }}>Days Logged</p>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.5rem' }}>
-            <span style={{ fontSize: '3rem', fontWeight: 800, color: '#0f172a' }}>{totalDays}</span>
-            <span style={{ fontSize: '1rem', color: '#64748b', fontWeight: 500 }}>entries</span>
-          </div>
-          <p style={{ color: '#64748b', fontSize: '0.875rem', marginTop: '0.5rem' }}>Since you started tracking</p>
+        <div className="card" style={{ padding: '1.25rem' }}>
+          <p style={{ fontSize: '0.65rem', fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '0.5rem' }}>
+            <BarChart2 size={14} style={{ marginRight: 6, verticalAlign: 'middle' }} />
+            Outliers
+          </p>
+          <p style={{ fontSize: '2rem', fontWeight: 900, color: 'var(--text-primary)' }}>{boxplot?.outliers?.length ?? '—'}</p>
         </div>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
-        {/* Focus Chart */}
         <div className="card" style={{ padding: '2rem' }}>
-          <h3 style={{ fontSize: '1rem', fontWeight: 700, marginBottom: '1.5rem' }}>Focus Intensity Trend</h3>
-          {chartData.length > 0 ? (
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', alignItems: 'center', marginBottom: '1.25rem' }}>
+            <h3 style={{ fontSize: '1rem', fontWeight: 800, margin: 0 }}>Line: Performance over time</h3>
+            <button className="btn btn-outline" style={{ fontSize: '0.75rem' }} onClick={() => toggleAdvanced('line')}>
+              {showAdvanced.line ? 'Hide Advanced Statistics' : 'Show Advanced Statistics'}
+            </button>
+          </div>
+          {line?.data?.data?.length > 0 ? (
             <ResponsiveContainer width="100%" height={260}>
-              <LineChart data={chartData} margin={{ top: 5, right: 10, left: -25, bottom: 5 }}>
-                <CartesianGrid vertical={false} stroke="#f1f5f9" />
+              <LineChart data={line.data.data} margin={{ top: 5, right: 10, left: -25, bottom: 5 }}>
+                <CartesianGrid vertical={false} stroke="var(--panel-border)" />
                 <XAxis
-                  dataKey="date"
-                  tick={{ fill: '#94a3b8', fontSize: 11 }}
+                  dataKey="x"
+                  tick={{ fill: 'var(--text-muted)', fontSize: 11 }}
                   tickLine={false}
                   axisLine={false}
                   tickFormatter={(v) => v?.slice(5)} // MM-DD
                 />
                 <YAxis 
-                  domain={[1, 5]} 
-                  ticks={[1,2,3,4,5]} 
-                  tick={{ fill: '#94a3b8', fontSize: 11 }} 
+                  domain={[40, 100]}
+                  tick={{ fill: 'var(--text-muted)', fontSize: 11 }}
                   tickLine={false} 
                   axisLine={false} 
                 />
                 <Tooltip
                   contentStyle={{ 
-                    background: '#fff', 
+                    background: 'var(--panel-bg)', 
                     borderRadius: '8px', 
-                    border: '1px solid #e2e8f0',
-                    boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)',
+                    border: '1px solid var(--panel-border)',
                     fontSize: '0.75rem' 
                   }}
                 />
                 <Line
                   type="monotone"
-                  dataKey="focus"
-                  stroke="#4f46e5"
+                  dataKey="y"
+                  stroke="var(--accent-primary)"
                   strokeWidth={2}
-                  dot={{ fill: '#4f46e5', r: 3, strokeWidth: 0 }}
-                  activeDot={{ r: 5, fill: '#4f46e5', stroke: '#fff', strokeWidth: 2 }}
+                  dot={{ fill: 'var(--accent-primary)', r: 3, strokeWidth: 0 }}
+                  activeDot={{ r: 5, fill: 'var(--accent-primary)', stroke: '#fff', strokeWidth: 2 }}
                 />
               </LineChart>
             </ResponsiveContainer>
@@ -226,35 +186,178 @@ function Analysis() {
               No data available yet.
             </div>
           )}
+          <p style={{ marginTop: '0.75rem', color: 'var(--text-secondary)', fontSize: '0.875rem' }}>
+            {line?.interpretation || '—'}
+          </p>
+          {showAdvanced.line && (
+            <pre style={{ marginTop: '0.75rem', background: 'var(--bg-color)', border: '1px solid var(--panel-border)', borderRadius: 10, padding: '0.75rem', fontSize: '0.75rem', overflowX: 'auto' }}>
+              {JSON.stringify(line?.stats || {}, null, 2)}
+            </pre>
+          )}
         </div>
 
-        {/* Mood Breakdown */}
         <div className="card" style={{ padding: '2rem' }}>
-          <h3 style={{ fontSize: '1rem', fontWeight: 700, marginBottom: '1.5rem' }}>Mood Breakdown</h3>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-            {[
-              { label: 'Happy', emoji: '😊', count: moodCounts.Happy, color: '#4f46e5' },
-              { label: 'Neutral', emoji: '😐', count: moodCounts.Neutral, color: '#6366f1' },
-              { label: 'Stressed', emoji: '😞', count: moodCounts.Stressed, color: '#94a3b8' },
-              { label: 'Tired', emoji: '😴', count: moodCounts.Tired, color: '#cbd5e1' },
-            ].map(({ label, emoji, count, color }) => {
-              const percentage = totalDays > 0 ? (count / totalDays) * 100 : 0;
-              return (
-                <div key={label}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.35rem', fontSize: '0.8125rem', fontWeight: 500 }}>
-                    <span style={{ color: '#475569' }}>{emoji} {label}</span>
-                    <span style={{ color: '#0f172a' }}>{count} days</span>
-                  </div>
-                  <div style={{ width: '100%', height: '6px', background: '#f1f5f9', borderRadius: '3px' }}>
-                    <div style={{ 
-                      width: `${percentage}%`, height: '100%', 
-                      background: color, borderRadius: '3px', transition: 'width 0.5s ease' 
-                    }} />
-                  </div>
-                </div>
-              );
-            })}
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', alignItems: 'center', marginBottom: '1.25rem' }}>
+            <h3 style={{ fontSize: '1rem', fontWeight: 800, margin: 0 }}>Bar: Completion by category</h3>
+            <button className="btn btn-outline" style={{ fontSize: '0.75rem' }} onClick={() => toggleAdvanced('category')}>
+              {showAdvanced.category ? 'Hide Advanced Statistics' : 'Show Advanced Statistics'}
+            </button>
           </div>
+          {categoryBar?.data?.data?.length > 0 ? (
+            <ResponsiveContainer width="100%" height={260}>
+              <BarChart data={categoryBar.data.data}>
+                <CartesianGrid vertical={false} stroke="var(--panel-border)" />
+                <XAxis dataKey="category" tick={{ fill: 'var(--text-muted)', fontSize: 11 }} tickLine={false} axisLine={false} />
+                <YAxis tick={{ fill: 'var(--text-muted)', fontSize: 11 }} tickLine={false} axisLine={false} />
+                <Tooltip contentStyle={{ background: 'var(--panel-bg)', border: '1px solid var(--panel-border)', borderRadius: 8, fontSize: '0.75rem' }} />
+                <Legend />
+                <Bar dataKey="completed" fill="var(--success)" radius={[6, 6, 0, 0]} />
+                <Bar dataKey="total" fill="var(--panel-border)" radius={[6, 6, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          ) : (
+            <div style={{ height: 260, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', fontSize: '0.875rem' }}>
+              No tasks available yet.
+            </div>
+          )}
+          <p style={{ marginTop: '0.75rem', color: 'var(--text-secondary)', fontSize: '0.875rem' }}>
+            {categoryBar?.interpretation || '—'}
+          </p>
+          {showAdvanced.category && (
+            <pre style={{ marginTop: '0.75rem', background: 'var(--bg-color)', border: '1px solid var(--panel-border)', borderRadius: 10, padding: '0.75rem', fontSize: '0.75rem', overflowX: 'auto' }}>
+              {JSON.stringify(categoryBar?.stats || {}, null, 2)}
+            </pre>
+          )}
+        </div>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', marginTop: '1.5rem' }}>
+        <div className="card" style={{ padding: '2rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', alignItems: 'center', marginBottom: '1.25rem' }}>
+            <h3 style={{ fontSize: '1rem', fontWeight: 800, margin: 0 }}>Weekday analysis</h3>
+            <button className="btn btn-outline" style={{ fontSize: '0.75rem' }} onClick={() => toggleAdvanced('weekday')}>
+              {showAdvanced.weekday ? 'Hide Advanced Statistics' : 'Show Advanced Statistics'}
+            </button>
+          </div>
+          {weekday?.data?.data?.length > 0 ? (
+            <ResponsiveContainer width="100%" height={260}>
+              <BarChart data={weekday.data.data}>
+                <CartesianGrid vertical={false} stroke="var(--panel-border)" />
+                <XAxis dataKey="weekday" tick={{ fill: 'var(--text-muted)', fontSize: 11 }} tickLine={false} axisLine={false} />
+                <YAxis tick={{ fill: 'var(--text-muted)', fontSize: 11 }} tickLine={false} axisLine={false} />
+                <Tooltip contentStyle={{ background: 'var(--panel-bg)', border: '1px solid var(--panel-border)', borderRadius: 8, fontSize: '0.75rem' }} />
+                <Bar dataKey="avg_score" fill="var(--accent-primary)" radius={[6, 6, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          ) : (
+            <div style={{ height: 260, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', fontSize: '0.875rem' }}>
+              No weekday data yet.
+            </div>
+          )}
+          <p style={{ marginTop: '0.75rem', color: 'var(--text-secondary)', fontSize: '0.875rem' }}>
+            {weekday?.interpretation || '—'}
+          </p>
+          {showAdvanced.weekday && (
+            <pre style={{ marginTop: '0.75rem', background: 'var(--bg-color)', border: '1px solid var(--panel-border)', borderRadius: 10, padding: '0.75rem', fontSize: '0.75rem', overflowX: 'auto' }}>
+              {JSON.stringify(weekday?.stats || {}, null, 2)}
+            </pre>
+          )}
+        </div>
+
+        <div className="card" style={{ padding: '2rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', alignItems: 'center', marginBottom: '1.25rem' }}>
+            <h3 style={{ fontSize: '1rem', fontWeight: 800, margin: 0 }}>Score consistency</h3>
+            <button className="btn btn-outline" style={{ fontSize: '0.75rem' }} onClick={() => toggleAdvanced('boxplot')}>
+              {showAdvanced.boxplot ? 'Hide Advanced Statistics' : 'Show Advanced Statistics'}
+            </button>
+          </div>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem', marginBottom: '1rem' }}>
+            {boxplot?.interpretation || '—'}
+          </p>
+          {showAdvanced.boxplot && boxplot?.data ? (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.75rem' }}>
+              {[
+                { k: 'min', v: boxplot.data.min },
+                { k: 'q1', v: boxplot.data.q1 },
+                { k: 'median', v: boxplot.data.median },
+                { k: 'q3', v: boxplot.data.q3 },
+                { k: 'max', v: boxplot.data.max },
+                { k: 'iqr', v: boxplot.data.iqr },
+              ].map(x => (
+                <div key={x.k} style={{ background: 'var(--bg-color)', border: '1px solid var(--panel-border)', borderRadius: 10, padding: '0.75rem' }}>
+                  <p style={{ fontSize: '0.6rem', fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{x.k}</p>
+                  <p style={{ fontSize: '1.25rem', fontWeight: 900, color: 'var(--text-primary)', marginTop: '0.25rem' }}>{x.v}</p>
+                </div>
+              ))}
+              <div style={{ gridColumn: '1 / -1', marginTop: '0.25rem', color: 'var(--text-muted)', fontSize: '0.8125rem' }}>
+                Outliers: {boxplot.data.outliers?.length ? boxplot.data.outliers.join(', ') : 'None'}
+              </div>
+            </div>
+          ) : (
+            <div style={{ color: 'var(--text-muted)' }}>{loading ? 'Loading…' : 'No distribution data yet.'}</div>
+          )}
+        </div>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', marginTop: '1.5rem' }}>
+        <div className="card" style={{ padding: '2rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', alignItems: 'center', marginBottom: '1.25rem' }}>
+            <h3 style={{ fontSize: '1rem', fontWeight: 800, margin: 0 }}>Scatter: Focus vs Score</h3>
+            <button className="btn btn-outline" style={{ fontSize: '0.75rem' }} onClick={() => toggleAdvanced('focus')}>
+              {showAdvanced.focus ? 'Hide Advanced Statistics' : 'Show Advanced Statistics'}
+            </button>
+          </div>
+          {scatterFocus?.data?.data?.length > 0 ? (
+            <ResponsiveContainer width="100%" height={260}>
+              <ScatterChart>
+                <CartesianGrid stroke="var(--panel-border)" />
+                <XAxis dataKey="x" name="focus" tick={{ fill: 'var(--text-muted)', fontSize: 11 }} tickLine={false} axisLine={false} domain={[0, 5]} />
+                <YAxis dataKey="y" name="score" tick={{ fill: 'var(--text-muted)', fontSize: 11 }} tickLine={false} axisLine={false} domain={[40, 100]} />
+                <Tooltip cursor={{ strokeDasharray: '3 3' }} contentStyle={{ background: 'var(--panel-bg)', border: '1px solid var(--panel-border)', borderRadius: 8, fontSize: '0.75rem' }} />
+                <Scatter data={scatterFocus.data.data} fill="var(--accent-primary)" />
+              </ScatterChart>
+            </ResponsiveContainer>
+          ) : (
+            <div style={{ height: 260, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)' }}>No points yet.</div>
+          )}
+          <p style={{ marginTop: '0.75rem', color: 'var(--text-secondary)', fontSize: '0.875rem' }}>
+            {scatterFocus?.interpretation || '—'}
+          </p>
+          {showAdvanced.focus && (
+            <pre style={{ marginTop: '0.75rem', background: 'var(--bg-color)', border: '1px solid var(--panel-border)', borderRadius: 10, padding: '0.75rem', fontSize: '0.75rem', overflowX: 'auto' }}>
+              {JSON.stringify(scatterFocus?.stats || {}, null, 2)}
+            </pre>
+          )}
+        </div>
+
+        <div className="card" style={{ padding: '2rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', alignItems: 'center', marginBottom: '1.25rem' }}>
+            <h3 style={{ fontSize: '1rem', fontWeight: 800, margin: 0 }}>Scatter: Friction vs Score</h3>
+            <button className="btn btn-outline" style={{ fontSize: '0.75rem' }} onClick={() => toggleAdvanced('friction')}>
+              {showAdvanced.friction ? 'Hide Advanced Statistics' : 'Show Advanced Statistics'}
+            </button>
+          </div>
+          {scatterFriction?.data?.data?.length > 0 ? (
+            <ResponsiveContainer width="100%" height={260}>
+              <ScatterChart>
+                <CartesianGrid stroke="var(--panel-border)" />
+                <XAxis dataKey="x" name="friction" tick={{ fill: 'var(--text-muted)', fontSize: 11 }} tickLine={false} axisLine={false} />
+                <YAxis dataKey="y" name="score" tick={{ fill: 'var(--text-muted)', fontSize: 11 }} tickLine={false} axisLine={false} domain={[40, 100]} />
+                <Tooltip cursor={{ strokeDasharray: '3 3' }} contentStyle={{ background: 'var(--panel-bg)', border: '1px solid var(--panel-border)', borderRadius: 8, fontSize: '0.75rem' }} />
+                <Scatter data={scatterFriction.data.data} fill="var(--warning)" />
+              </ScatterChart>
+            </ResponsiveContainer>
+          ) : (
+            <div style={{ height: 260, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)' }}>No points yet.</div>
+          )}
+          <p style={{ marginTop: '0.75rem', color: 'var(--text-secondary)', fontSize: '0.875rem' }}>
+            {scatterFriction?.interpretation || '—'}
+          </p>
+          {showAdvanced.friction && (
+            <pre style={{ marginTop: '0.75rem', background: 'var(--bg-color)', border: '1px solid var(--panel-border)', borderRadius: 10, padding: '0.75rem', fontSize: '0.75rem', overflowX: 'auto' }}>
+              {JSON.stringify(scatterFriction?.stats || {}, null, 2)}
+            </pre>
+          )}
         </div>
       </div>
     </DashboardLayout>

@@ -34,6 +34,7 @@ function DashboardLayout({ children, goal }) {
   const navItems = [
     { to: '/dashboard', label: 'Overview',        icon: <LayoutDashboard size={17} /> },
     { to: '/log',       label: 'Run Daily Log',   icon: <CheckCircle size={17} /> },
+    { to: '/analysis',  label: 'Analysis',        icon: <BarChart2 size={17} /> },
     { to: '/history',   label: 'History',         icon: <History size={17} /> },
     { to: '/mastery',   label: 'Performance',     icon: <Star size={17} /> },
     { to: '/insights',  label: 'Lab Insights',    icon: <Brain size={17} /> },
