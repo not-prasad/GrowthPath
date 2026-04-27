@@ -1,6 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Target, CheckCircle, Clock, Plus, Star } from 'lucide-react';
+import { 
+  Target, CheckCircle, Clock, Plus, Star, ArrowRight, Activity, 
+  Sparkles, ShieldCheck, Trophy, ChevronRight
+} from 'lucide-react';
 import DashboardLayout from '../components/DashboardLayout';
 import { useAuth } from '../context/AuthContext';
 import { API_BASE, authHeaders, safeJson } from '../api/base';
@@ -38,93 +41,140 @@ function Goals() {
   const activeGoals = goals.filter(g => g.status === 'active');
   const completedGoals = goals.filter(g => g.status === 'completed');
 
+  if (loading) return (
+    <DashboardLayout goal={goals.find(g => g.id.toString() === activeGoalId)}>
+      <div className="premium-page" style={{ alignItems: 'center', justifyContent: 'center', minHeight: '60vh' }}>
+        <Sparkles className="spin" size={40} color="var(--accent-primary)" />
+        <p className="premium-muted">Mapping telemetry paths...</p>
+      </div>
+    </DashboardLayout>
+  );
+
   return (
     <DashboardLayout goal={goals.find(g => g.id.toString() === activeGoalId)}>
-      <div style={{ marginBottom: '2.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-        <div>
-          <h1 style={{ fontSize: '1.875rem', fontWeight: 800, marginBottom: '0.25rem' }}>Goal Management</h1>
-          <p style={{ color: 'var(--text-secondary)', fontSize: '0.9375rem' }}>Manage your active journey and archive your achievements.</p>
-        </div>
-        <button className="btn btn-primary" onClick={() => navigate('/setup')} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          <Plus size={18} /> New Goal
-        </button>
-      </div>
+      <div className="premium-page">
+        <header className="premium-header" style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <p className="premium-kicker">Navigation Hub</p>
+            <h1 className="premium-title">Mission Control</h1>
+            <p className="premium-subtitle">Switch between active experiments or define a new performance vector.</p>
+          </div>
+          <button className="btn btn-primary" onClick={() => navigate('/setup')}>
+            <Plus size={18} /> New Objective
+          </button>
+        </header>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '2.5rem' }}>
-        {/* ACTIVE GOALS */}
-        <section>
-          <h2 style={{ fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--accent-primary)', marginBottom: '1.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <Clock size={14} /> Active Path ({activeGoals.length})
+        <section className="premium-section">
+          <h2 className="premium-section-title">
+            <Activity size={20} className="text-secondary" /> Active Vectors ({activeGoals.length})
           </h2>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '1rem' }}>
-            {activeGoals.map(goal => (
-              <div 
-                key={goal.id} 
-                className="card" 
-                style={{ 
-                  display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1.5rem',
-                  border: goal.id.toString() === activeGoalId ? '1px solid var(--accent-primary)' : '1px solid var(--panel-border)',
-                  boxShadow: goal.id.toString() === activeGoalId ? '0 0 15px var(--accent-subtle)' : 'none'
-                }}
-              >
-                <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'center' }}>
-                  <div style={{ 
-                    width: '40px', height: '40px', background: 'var(--accent-subtle)', 
-                    color: 'var(--accent-primary)', borderRadius: '10px', display: 'flex', 
-                    alignItems: 'center', justifyContent: 'center' 
-                  }}>
-                    <Target size={20} />
-                  </div>
-                  <div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.25rem' }}>
-                      <h3 style={{ fontSize: '1.125rem', fontWeight: 700 }}>{goal.title}</h3>
-                      {goal.id.toString() === activeGoalId && (
-                        <span style={{ fontSize: '0.625rem', padding: '2px 6px', background: 'var(--accent-primary)', color: '#fff', borderRadius: '4px', fontWeight: 700, textTransform: 'uppercase' }}>Active</span>
-                      )}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '1rem', marginTop: '1.5rem' }}>
+            {activeGoals.map(goal => {
+              const isActive = goal.id.toString() === activeGoalId;
+              return (
+                <div 
+                  key={goal.id} 
+                  className={`premium-card-hover ${isActive ? 'active-goal-card' : ''}`}
+                  style={{ 
+                    display: 'flex', 
+                    justifyContent: 'space-between', 
+                    alignItems: 'center', 
+                    padding: '1.5rem',
+                    background: isActive ? 'var(--glass-bg)' : 'var(--bg-color)',
+                    border: isActive ? '1px solid var(--accent-primary)' : '1px solid var(--panel-border)',
+                    borderRadius: '20px',
+                    boxShadow: isActive ? '0 8px 32px rgba(99, 102, 241, 0.2)' : 'none',
+                    backdropFilter: isActive ? 'blur(12px)' : 'none'
+                  }}
+                >
+                  <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'center' }}>
+                    <div style={{ 
+                      width: '48px', height: '48px', 
+                      background: isActive ? 'var(--header-gradient)' : 'var(--accent-subtle)', 
+                      color: isActive ? '#fff' : 'var(--accent-primary)', 
+                      borderRadius: '14px', display: 'flex', 
+                      alignItems: 'center', justifyContent: 'center',
+                      boxShadow: isActive ? '0 4px 12px rgba(99, 102, 241, 0.3)' : 'none'
+                    }}>
+                      <Target size={24} />
                     </div>
-                    <p style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>{goal.category} • {goal.deadline} days • {goal.commitment}</p>
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem' }}>
+                        <h3 style={{ fontSize: '1.25rem', fontWeight: 800 }}>{goal.title}</h3>
+                        {isActive && (
+                          <span className="badge badge-purple" style={{ fontSize: '0.6rem', padding: '2px 8px' }}>Tracking Now</span>
+                        )}
+                      </div>
+                      <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                          <ShieldCheck size={14} className="text-secondary" /> {goal.category}
+                        </span>
+                        <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                          <Clock size={14} className="text-secondary" /> {goal.deadline} Days
+                        </span>
+                        <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                          <Sparkles size={14} className="text-secondary" /> {goal.commitment}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '0.75rem' }}>
+                    {!isActive ? (
+                      <button className="btn btn-outline" style={{ padding: '0.5rem 1rem' }} onClick={() => switchGoal(goal.id)}>
+                        Activate <ChevronRight size={16} />
+                      </button>
+                    ) : (
+                      <button className="btn btn-primary" style={{ padding: '0.5rem 1rem' }} onClick={() => navigate('/dashboard')}>
+                         View Intelligence <ArrowRight size={16} />
+                      </button>
+                    )}
                   </div>
                 </div>
-
-                <div style={{ display: 'flex', gap: '0.75rem' }}>
-                  {goal.id.toString() !== activeGoalId && (
-                    <button className="btn btn-outline" style={{ fontSize: '0.75rem' }} onClick={() => switchGoal(goal.id)}>Switch</button>
-                  )}
-                </div>
-              </div>
-            ))}
+              );
+            })}
             {activeGoals.length === 0 && !loading && (
-              <div className="card" style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>
-                No active goals. Time to start a new adventure!
-              </div>
+              <p className="premium-empty" style={{ textAlign: 'center', padding: '3rem' }}>No active telemetry paths detected. Map a new objective to begin.</p>
             )}
           </div>
         </section>
 
-        {/* COMPLETED GOALS */}
         {completedGoals.length > 0 && (
-          <section>
-            <h2 style={{ fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--success)', marginBottom: '1.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <Star size={14} /> Wall of Achievements ({completedGoals.length})
+          <section className="premium-section">
+            <h2 className="premium-section-title">
+              <Trophy size={20} className="text-secondary" /> Achievement Archives ({completedGoals.length})
             </h2>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '1rem' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '1rem', marginTop: '1.5rem' }}>
               {completedGoals.map(goal => (
-                <div key={goal.id} className="card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1.5rem', opacity: 0.8 }}>
-                  <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'center' }}>
+                <div 
+                  key={goal.id} 
+                  className="premium-card-hover" 
+                  style={{ 
+                    display: 'flex', 
+                    flexDirection: 'column',
+                    padding: '1.5rem', 
+                    background: 'var(--bg-color)',
+                    border: '1px solid var(--panel-border)',
+                    borderRadius: '20px',
+                    opacity: 0.9
+                  }}
+                >
+                  <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', marginBottom: '1rem' }}>
                     <div style={{ 
-                      width: '40px', height: '40px', background: 'var(--success-subtle)', 
-                      color: 'var(--success)', borderRadius: '10px', display: 'flex', 
+                      width: '40px', height: '40px', background: 'rgba(16, 185, 129, 0.1)', 
+                      color: '#10b981', borderRadius: '10px', display: 'flex', 
                       alignItems: 'center', justifyContent: 'center' 
                     }}>
                       <CheckCircle size={20} />
                     </div>
                     <div>
-                      <h3 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text-primary)' }}>{goal.title}</h3>
-                      <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Completed on {new Date(goal.created_at).toLocaleDateString()}</p>
+                      <h3 style={{ fontSize: '1rem', fontWeight: 800 }}>{goal.title}</h3>
+                      <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Success Vector Locked</p>
                     </div>
                   </div>
-                  <div style={{ display: 'flex', gap: '0.75rem' }}>
-                    <button className="btn btn-outline" style={{ fontSize: '0.75rem' }} onClick={() => switchGoal(goal.id)}>View</button>
+                  <div style={{ borderTop: '1px solid var(--panel-border)', paddingTop: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Finished {new Date(goal.created_at).toLocaleDateString()}</span>
+                    <button className="btn btn-outline" style={{ padding: '0.35rem 0.75rem', fontSize: '0.75rem' }} onClick={() => switchGoal(goal.id)}>Analytics</button>
                   </div>
                 </div>
               ))}

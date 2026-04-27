@@ -1,6 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Layers, Plus, Trash2, ArrowRight, ChevronRight } from 'lucide-react';
+import { 
+  Layers, Plus, Trash2, ArrowRight, ChevronRight, Sparkles, 
+  Zap, Link, Activity, Trash
+} from 'lucide-react';
 import DashboardLayout from '../components/DashboardLayout';
 import { useAuth } from '../context/AuthContext';
 
@@ -15,6 +18,7 @@ function HabitStack() {
   const { token, logout } = useAuth();
   const navigate = useNavigate();
 
+  const API_BASE = 'http://localhost:5000/api';
   const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
 
   useEffect(() => {
@@ -24,8 +28,8 @@ function HabitStack() {
       setLoading(true);
       try {
         const [goalRes, habitsRes] = await Promise.all([
-          fetch(`http://localhost:5000/api/goals/${goalId}`, { headers: { Authorization: `Bearer ${token}` } }),
-          fetch('http://localhost:5000/api/habits', { headers: { Authorization: `Bearer ${token}` } }),
+          fetch(`${API_BASE}/goals/${goalId}`, { headers: { Authorization: `Bearer ${token}` } }),
+          fetch(`${API_BASE}/habits`, { headers: { Authorization: `Bearer ${token}` } }),
         ]);
         if (goalRes.status === 401 || habitsRes.status === 401) { logout(); navigate('/login'); return; }
         if (goalRes.ok) setGoal(await goalRes.json());
@@ -45,7 +49,7 @@ function HabitStack() {
     setSaving(true);
     setError('');
     try {
-      const res = await fetch('http://localhost:5000/api/habits', {
+      const res = await fetch(`${API_BASE}/habits`, {
         method: 'POST',
         headers,
         body: JSON.stringify({ trigger_habit: trigger, new_habit: newHabit }),
@@ -64,186 +68,179 @@ function HabitStack() {
 
   const handleDelete = async (id) => {
     try {
-      await fetch(`http://localhost:5000/api/habits/${id}`, { method: 'DELETE', headers });
+      await fetch(`${API_BASE}/habits/${id}`, { method: 'DELETE', headers });
       setHabits(prev => prev.filter(h => h.id !== id));
     } catch {
       setError('Could not delete.');
     }
   };
 
+  if (loading) return (
+    <DashboardLayout goal={goal}>
+      <div className="premium-page" style={{ alignItems: 'center', justifyContent: 'center', minHeight: '60vh' }}>
+        <Sparkles className="spin" size={40} color="var(--accent-primary)" />
+        <p className="premium-muted">Linking neural pathways...</p>
+      </div>
+    </DashboardLayout>
+  );
+
   return (
     <DashboardLayout goal={goal}>
-      <div style={{ marginBottom: '2.5rem' }}>
-        <h1 style={{ fontSize: '1.875rem', fontWeight: 800, marginBottom: '0.25rem' }}>
-          Habit Stacking
-        </h1>
-        <p style={{ color: 'var(--text-secondary)', fontSize: '0.9375rem' }}>
-          Link a new habit to an existing one. Build powerful routines effortlessly.
-        </p>
-      </div>
+      <div className="premium-page">
+        <header className="premium-header">
+          <p className="premium-kicker">Routine Architecture</p>
+          <h1 className="premium-title">Habit Stacking</h1>
+          <p className="premium-subtitle">Chain new behaviors to existing anchors to maximize neurological efficiency.</p>
+        </header>
 
-      {/* Formula Explainer */}
-      <div style={{
-        background: 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)',
-        borderRadius: '16px', padding: '1.75rem 2rem',
-        marginBottom: '2rem', color: '#fff',
-        display: 'flex', alignItems: 'center', gap: '1rem',
-        flexWrap: 'wrap',
-      }}>
-        <Layers size={22} style={{ flexShrink: 0 }} />
-        <div>
-          <p style={{ fontWeight: 700, fontSize: '0.9375rem', marginBottom: '0.25rem', color: '#fff' }}>
-            The Habit Stack Formula
-          </p>
-          <p style={{ fontSize: '0.8125rem', opacity: 0.85, color: '#fff' }}>
-            "After I <strong>[Current Habit]</strong>, I will <strong>[New Habit]</strong>."
-            — Anchor new behaviors to things you already do.
-          </p>
-        </div>
-      </div>
+        {/* Formula Explainer */}
+        <section className="premium-section" style={{
+          background: 'var(--header-gradient)',
+          borderRadius: '24px', padding: '2rem 2.5rem',
+          marginBottom: '2rem', color: '#fff',
+          display: 'flex', alignItems: 'center', gap: '1.5rem',
+          boxShadow: '0 8px 32px rgba(79, 70, 229, 0.3)',
+          border: 'none'
+        }}>
+          <div style={{ 
+            width: '56px', height: '56px', background: 'rgba(255,255,255,0.2)', 
+            borderRadius: '16px', display: 'flex', alignItems: 'center', 
+            justifyContent: 'center', backdropFilter: 'blur(10px)'
+          }}>
+            <Layers size={28} color="#fff" />
+          </div>
+          <div>
+            <h3 style={{ fontWeight: 800, fontSize: '1.25rem', marginBottom: '0.25rem', color: '#fff' }}>
+              The Stacking Formula
+            </h3>
+            <p style={{ fontSize: '0.9rem', opacity: 0.9, color: '#fff', lineHeight: 1.5 }}>
+              "After I <strong>[Current Anchor]</strong>, I will <strong>[New Vector]</strong>."
+              <br/><span style={{ fontSize: '0.75rem', opacity: 0.7 }}>— James Clear, Atomic Habits</span>
+            </p>
+          </div>
+        </section>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.4fr', gap: '2rem' }}>
-        {/* Add Form */}
-        <div className="card" style={{ padding: '2rem' }}>
-          <h3 style={{ fontSize: '1rem', fontWeight: 700, marginBottom: '1.5rem', color: 'var(--text-primary)' }}>
-            Create a Stack
-          </h3>
-          <form onSubmit={handleAdd}>
-            <div className="form-group">
-              <label>After I…</label>
-              <input
-                id="trigger-habit"
-                className="form-control"
-                placeholder="e.g. Brush my teeth"
-                value={trigger}
-                onChange={e => setTrigger(e.target.value)}
-              />
+        <div className="premium-grid-two" style={{ gridTemplateColumns: 'minmax(0, 0.8fr) minmax(0, 1.2fr)' }}>
+          {/* Add Form */}
+          <section className="premium-section" style={{ padding: '2rem' }}>
+            <h3 className="premium-mini-title"><Plus size={18} className="text-secondary" /> New Neural Link</h3>
+            <form onSubmit={handleAdd} style={{ marginTop: '1.5rem' }}>
+              <div className="form-group">
+                <label style={{ fontSize: '0.75rem', fontWeight: 800, textTransform: 'uppercase', color: 'var(--text-muted)' }}>Anchor Point</label>
+                <input
+                  id="trigger-habit"
+                  className="form-control"
+                  placeholder="e.g., Pour my morning coffee"
+                  value={trigger}
+                  onChange={e => setTrigger(e.target.value)}
+                  style={{ marginTop: '0.5rem', background: 'var(--bg-color)' }}
+                />
+              </div>
+
+              <div style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                margin: '1.5rem 0', gap: '1rem', color: 'var(--accent-primary)'
+              }}>
+                <div style={{ flex: 1, height: '1px', background: 'var(--panel-border)' }} />
+                <Zap size={20} className="text-secondary" />
+                <div style={{ flex: 1, height: '1px', background: 'var(--panel-border)' }} />
+              </div>
+
+              <div className="form-group">
+                <label style={{ fontSize: '0.75rem', fontWeight: 800, textTransform: 'uppercase', color: 'var(--text-muted)' }}>New Behavior</label>
+                <input
+                  id="new-habit"
+                  className="form-control"
+                  placeholder="e.g., Write 3 task sectors"
+                  value={newHabit}
+                  onChange={e => setNewHabit(e.target.value)}
+                  style={{ marginTop: '0.5rem', background: 'var(--bg-color)' }}
+                />
+              </div>
+
+              {error && (
+                <p style={{ color: 'var(--danger)', fontSize: '0.8rem', margin: '1rem 0', fontWeight: 600 }}>{error}</p>
+              )}
+
+              <button
+                id="add-habit-stack"
+                type="submit"
+                className="btn btn-primary"
+                disabled={saving}
+                style={{ width: '100%', marginTop: '1rem', padding: '0.875rem' }}
+              >
+                {saving ? 'Synchronizing...' : <><Link size={18} /> Initialize Stack</>}
+              </button>
+            </form>
+          </section>
+
+          {/* Habit Stack List */}
+          <section className="premium-section" style={{ padding: '2rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+              <h3 className="premium-mini-title"><Activity size={18} className="text-secondary" /> Active Stacks</h3>
+              <span className="badge badge-purple">
+                {habits.length} UNITS
+              </span>
             </div>
 
-            {/* Visual connector */}
-            <div style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              margin: '0 0 1.25rem', gap: '0.5rem', color: 'var(--accent-primary)'
-            }}>
-              <div style={{ flex: 1, height: '1px', background: 'var(--panel-border)' }} />
-              <ArrowRight size={20} strokeWidth={2.5} />
-              <div style={{ flex: 1, height: '1px', background: 'var(--panel-border)' }} />
-            </div>
-
-            <div className="form-group">
-              <label>I will…</label>
-              <input
-                id="new-habit"
-                className="form-control"
-                placeholder="e.g. Meditate for 5 mins"
-                value={newHabit}
-                onChange={e => setNewHabit(e.target.value)}
-              />
-            </div>
-
-            {error && (
-              <p style={{ color: 'var(--danger)', fontSize: '0.8125rem', marginBottom: '1rem' }}>{error}</p>
+            {habits.length === 0 && (
+              <div style={{
+                textAlign: 'center', padding: '4rem 2rem',
+                color: 'var(--text-muted)', borderRadius: '20px',
+                border: '2px dashed var(--panel-border)', background: 'var(--bg-color)'
+              }}>
+                <Layers size={40} style={{ opacity: 0.15, marginBottom: '1rem' }} />
+                <p style={{ fontSize: '0.9rem', fontWeight: 600 }}>No neural links detected.</p>
+              </div>
             )}
 
-            <button
-              id="add-habit-stack"
-              type="submit"
-              className="btn btn-primary"
-              disabled={saving}
-              style={{ width: '100%' }}
-            >
-              {saving ? 'Saving…' : <><Plus size={16} /> Add Stack</>}
-            </button>
-          </form>
-        </div>
-
-        {/* Habit Stack List */}
-        <div className="card" style={{ padding: '2rem' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-            <h3 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text-primary)' }}>
-              Your Stacks
-            </h3>
-            <span style={{
-              fontSize: '0.75rem', color: 'var(--text-secondary)',
-              background: 'var(--bg-color)', border: '1px solid var(--panel-border)',
-              padding: '0.2rem 0.625rem', borderRadius: '999px'
-            }}>
-              {habits.length} stack{habits.length !== 1 ? 's' : ''}
-            </span>
-          </div>
-
-          {loading && (
-            <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>
-              Loading…
-            </div>
-          )}
-
-          {!loading && habits.length === 0 && (
-            <div style={{
-              textAlign: 'center', padding: '2.5rem 1rem',
-              color: 'var(--text-muted)', borderRadius: '10px',
-              border: '1px dashed var(--panel-border)'
-            }}>
-              <Layers size={32} style={{ opacity: 0.25, marginBottom: '0.75rem' }} />
-              <p style={{ fontSize: '0.875rem' }}>No stacks yet. Create your first one!</p>
-            </div>
-          )}
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.875rem' }}>
-            {habits.map((h, idx) => (
-              <div
-                key={h.id}
-                className="habit-stack-card"
-                style={{ animation: `fadeIn 0.3s ease-out ${idx * 0.05}s both` }}
-              >
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <p style={{
-                    fontSize: '0.8125rem', color: 'var(--text-secondary)',
-                    fontWeight: 500, marginBottom: '0.25rem'
-                  }}>
-                    After I…
-                  </p>
-                  <p style={{
-                    fontWeight: 600, fontSize: '0.9375rem', color: 'var(--text-primary)',
-                    whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'
-                  }}>
-                    {h.trigger_habit}
-                  </p>
-                </div>
-
-                <ChevronRight size={18} color="var(--accent-primary)" style={{ flexShrink: 0 }} />
-
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <p style={{
-                    fontSize: '0.8125rem', color: 'var(--accent-primary)',
-                    fontWeight: 500, marginBottom: '0.25rem'
-                  }}>
-                    I will…
-                  </p>
-                  <p style={{
-                    fontWeight: 600, fontSize: '0.9375rem', color: 'var(--text-primary)',
-                    whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'
-                  }}>
-                    {h.new_habit}
-                  </p>
-                </div>
-
-                <button
-                  onClick={() => handleDelete(h.id)}
-                  style={{
-                    background: 'none', border: 'none', cursor: 'pointer',
-                    color: 'var(--text-muted)', padding: '0.375rem',
-                    borderRadius: '6px', flexShrink: 0, transition: 'color 0.2s'
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              {habits.map((h, idx) => (
+                <div
+                  key={h.id}
+                  className="premium-card-hover"
+                  style={{ 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    gap: '1rem',
+                    padding: '1.25rem',
+                    background: 'var(--bg-color)',
+                    border: '1px solid var(--panel-border)',
+                    borderRadius: '16px'
                   }}
-                  onMouseEnter={e => e.currentTarget.style.color = 'var(--danger)'}
-                  onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}
-                  title="Delete"
                 >
-                  <Trash2 size={15} />
-                </button>
-              </div>
-            ))}
-          </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontWeight: 800, textTransform: 'uppercase', marginBottom: '0.25rem' }}>Anchor</p>
+                    <p style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {h.trigger_habit}
+                    </p>
+                  </div>
+
+                  <ChevronRight size={20} className="text-secondary" style={{ flexShrink: 0, opacity: 0.5 }} />
+
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ fontSize: '0.65rem', color: 'var(--accent-primary)', fontWeight: 800, textTransform: 'uppercase', marginBottom: '0.25rem' }}>Vector</p>
+                    <p style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {h.new_habit}
+                    </p>
+                  </div>
+
+                  <button
+                    onClick={() => handleDelete(h.id)}
+                    className="btn-danger"
+                    style={{
+                      background: 'none', border: 'none', cursor: 'pointer',
+                      color: 'var(--text-muted)', padding: '0.5rem',
+                      borderRadius: '8px', flexShrink: 0, transition: 'all 0.2s'
+                    }}
+                    title="Delete Stack"
+                  >
+                    <Trash size={16} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </section>
         </div>
       </div>
     </DashboardLayout>
