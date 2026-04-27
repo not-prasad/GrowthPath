@@ -2,7 +2,7 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   TrendingUp, TrendingDown, Minus, ArrowRight, Zap, 
-  FlaskConical, Calendar, LayoutDashboard, Brain, Activity, Sparkles 
+  Target, FlaskConical, Calendar, LayoutDashboard, Brain, Activity, Sparkles 
 } from 'lucide-react';
 import { 
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, 
