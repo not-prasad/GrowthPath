@@ -54,7 +54,7 @@ function DashboardLayout({ children, goal }) {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '2rem', padding: '0 0.25rem' }}>
           <h2 style={{
             fontSize: '1.125rem', fontWeight: 800, display: 'flex', alignItems: 'center',
-            gap: '0.5rem', color: 'var(--text-primary)', letterSpacing: '-0.02em'
+            gap: '0.5rem', color: '#ffffff', letterSpacing: '-0.02em'
           }}>
             <div style={{
               width: '28px', height: '28px', background: 'var(--accent-primary)', borderRadius: '7px',
@@ -62,7 +62,7 @@ function DashboardLayout({ children, goal }) {
             }}>
               <Target size={17} color="#fff" />
             </div>
-            Perf. Lab
+            GrowthPath
           </h2>
           <button
             id="theme-toggle"
@@ -76,18 +76,18 @@ function DashboardLayout({ children, goal }) {
 
         {/* Global Level Profile */}
         {profile && (
-          <div style={{ marginBottom: '2rem', padding: '1.125rem', background: 'var(--panel-bg)', borderRadius: '10px', border: '1px solid var(--panel-border)' }}>
+          <div style={{ marginBottom: '2rem', padding: '1rem', background: 'rgba(255,255,255,0.05)', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.07)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-              <span style={{ fontSize: '0.65rem', fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-muted)', letterSpacing: '0.08em' }}>XP Progress</span>
+              <span style={{ fontSize: '0.65rem', fontWeight: 700, textTransform: 'uppercase', color: 'var(--sidebar-text)', letterSpacing: '0.08em' }}>XP Progress</span>
               <span style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--accent-primary)', fontVariantNumeric: 'tabular-nums' }}>Lvl {profile.level}</span>
             </div>
-            <div style={{ width: '100%', height: '4px', background: 'var(--input-bg)', borderRadius: '999px', overflow: 'hidden' }}>
+            <div style={{ width: '100%', height: '4px', background: 'rgba(255,255,255,0.08)', borderRadius: '999px', overflow: 'hidden' }}>
               <div style={{ 
                 width: `${(((profile.total_xp || 0) % 1000) / 10)}%`, height: '100%', background: 'var(--accent-primary)', 
                 borderRadius: '999px', transition: 'width 0.5s ease'
               }} />
             </div>
-            <div style={{ fontSize: '0.625rem', color: 'var(--text-muted)', textAlign: 'right', marginTop: '0.4rem', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
+            <div style={{ fontSize: '0.625rem', color: 'var(--sidebar-text)', textAlign: 'right', marginTop: '0.4rem', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
               {(profile.total_xp || 0) % 1000} / 1000 XP
             </div>
           </div>
@@ -96,7 +96,7 @@ function DashboardLayout({ children, goal }) {
         {/* Navigation */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1px', flexGrow: 1 }}>
           <p style={{
-            fontSize: '0.625rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase',
+            fontSize: '0.625rem', fontWeight: 700, color: 'var(--sidebar-text)', textTransform: 'uppercase',
             letterSpacing: '0.07em', marginBottom: '0.375rem', paddingLeft: '0.75rem'
           }}>
             Navigation
@@ -115,23 +115,23 @@ function DashboardLayout({ children, goal }) {
         {/* Active Goal Widget */}
         {goal && (
           <div style={{
-            marginTop: 'auto', padding: '1.125rem', background: 'var(--bg-color)',
-            borderRadius: '12px', border: '1px solid var(--panel-border)', marginBottom: '1.125rem'
+            marginTop: 'auto', padding: '1rem', background: 'rgba(255,255,255,0.04)',
+            borderRadius: '12px', border: '1px solid rgba(255,255,255,0.06)', marginBottom: '1.125rem'
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.375rem' }}>
               <p style={{
-                fontSize: '0.6rem', color: 'var(--text-muted)', fontWeight: 700,
+                fontSize: '0.6rem', color: 'var(--sidebar-text)', fontWeight: 700,
                 textTransform: 'uppercase', letterSpacing: '0.07em'
               }}>
                 Active Goal
               </p>
               <div style={{ display: 'flex', gap: '8px' }}>
-                <Plus size={12} className="sidebar-icon-btn" onClick={() => navigate('/setup')} style={{ cursor: 'pointer', color: 'var(--text-muted)' }} />
-                <Settings size={12} className="sidebar-icon-btn" onClick={() => navigate('/goals')} style={{ cursor: 'pointer', color: 'var(--text-muted)' }} />
+                <Plus size={12} className="sidebar-icon-btn" onClick={() => navigate('/setup')} style={{ cursor: 'pointer', color: 'var(--sidebar-text)' }} />
+                <Settings size={12} className="sidebar-icon-btn" onClick={() => navigate('/goals')} style={{ cursor: 'pointer', color: 'var(--sidebar-text)' }} />
               </div>
             </div>
             <p style={{
-              fontWeight: 600, color: 'var(--text-primary)', marginBottom: '0.625rem',
+              fontWeight: 600, color: 'rgba(255,255,255,0.85)', marginBottom: '0.625rem',
               fontSize: '0.8125rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'
             }}>
               {goal.title}
@@ -141,20 +141,20 @@ function DashboardLayout({ children, goal }) {
         )}
 
         {/* User / Logout */}
-        <div style={{ paddingTop: '1.125rem', borderTop: '1px solid var(--panel-border)' }}>
+        <div style={{ paddingTop: '1.125rem', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem', padding: '0 0.25rem', marginBottom: '0.75rem' }}>
             <div style={{
-              width: '30px', height: '30px', background: 'var(--accent-subtle)', borderRadius: '50%',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent-primary)',
+              width: '30px', height: '30px', background: 'rgba(255,255,255,0.08)', borderRadius: '50%',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--sidebar-text)',
               flexShrink: 0
             }}>
               <User size={14} />
             </div>
             <div style={{ overflow: 'hidden' }}>
-              <p style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              <p style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'rgba(255,255,255,0.85)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                 {user?.email?.split('@')[0]}
               </p>
-              <p style={{ fontSize: '0.6875rem', color: 'var(--text-secondary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              <p style={{ fontSize: '0.6875rem', color: 'var(--sidebar-text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                 {user?.email}
               </p>
             </div>

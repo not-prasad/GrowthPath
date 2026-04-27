@@ -2,7 +2,7 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   TrendingUp, TrendingDown, Minus, ArrowRight, Zap, 
-  Target, FlaskConical, Calendar, LayoutDashboard, Brain, Activity, Sparkles 
+  Target, FlaskConical, Calendar, Brain, Activity, Sparkles 
 } from 'lucide-react';
 import { 
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, 
@@ -18,7 +18,6 @@ function Dashboard() {
   const [trends, setTrends] = useState(null);
   const [days, setDays] = useState([]);
   const [insights, setInsights] = useState([]);
-
   const [loading, setLoading] = useState(true);
   const [insightsLoading, setInsightsLoading] = useState(true);
 
@@ -27,11 +26,9 @@ function Dashboard() {
 
   useEffect(() => {
     const storedGoalId = localStorage.getItem('growthpath_goal_id');
-
     const fetchData = async () => {
       try {
         const headers = authHeaders(token);
-
         let goalId = storedGoalId;
         if (!goalId) {
           const goalsRes = await fetch(`${API_BASE}/goals`, { headers });
@@ -65,29 +62,24 @@ function Dashboard() {
           const t = await safeJson(trendsRes);
           setTrends(t?.trends || null);
         }
-
         if (logsRes.ok) {
           const l = await safeJson(logsRes);
           setDays(l?.days || []);
         }
-
         setInsightsLoading(true);
         if (insightsRes.ok) {
           const ins = await safeJson(insightsRes);
-          const list = ins?.insights || [];
-          setInsights(list);
+          setInsights(ins?.insights || []);
         } else {
           setInsights([]);
         }
         setInsightsLoading(false);
-
       } catch (error) {
         console.error('Dashboard load error:', error);
       } finally {
         setLoading(false);
       }
     };
-
     fetchData();
   }, [token, navigate, logout]);
 
@@ -129,146 +121,226 @@ function Dashboard() {
     );
   }
 
+  // ── Derived state ──────────────────────────────────────────────
   const TrendIcon = trends?.trend === 'up' ? TrendingUp : trends?.trend === 'down' ? TrendingDown : Minus;
-  const trendColor = trends?.trend === 'up' ? 'var(--success)' : trends?.trend === 'down' ? 'var(--danger)' : 'var(--text-muted)';
+  const trendColor = trends?.trend === 'up' ? '#10b981' : trends?.trend === 'down' ? '#ef4444' : '#a89ec0';
   const latestScore = days?.[0] ? Math.round(days[0].performance_score || 0) : null;
   const latestFocus = days?.[0] ? Number(days[0].focus_level || 0).toFixed(1) : null;
-  
-  const summarySentence = latestScore == null
-    ? 'Start your performance baseline by logging today\'s data.'
-    : latestScore >= 80
-      ? 'Peak state detected. Your current rhythm is highly efficient.'
-      : latestScore >= 65
-        ? 'Steady performance. Minor adjustments could lead to peak output.'
-        : 'Below baseline detected. Focus on friction reduction today.';
-
   const trendChartData = [...(trends?.data || [])].reverse();
 
+  const weekAvg = trendChartData.length > 0
+    ? Math.round(trendChartData.reduce((s, d) => s + (d.performance_score || 0), 0) / trendChartData.length)
+    : null;
+
+  const today = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+
+  const scoreLabel = latestScore == null
+    ? 'No data yet — log today to start.'
+    : latestScore >= 80 ? 'Peak state. Keep the rhythm.'
+    : latestScore >= 65 ? 'Steady. One push could unlock peak.'
+    : 'Below baseline. Reduce friction today.';
+
+  // ── Render ─────────────────────────────────────────────────────
   return (
     <DashboardLayout goal={goal}>
       <div className="premium-page">
-        <header className="premium-header" style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+
+        {/* ── Top bar ── */}
+        <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <div>
-            <p className="premium-kicker">Performance Overview</p>
-            <h1 className="premium-title">Dashboard</h1>
-            <p className="premium-subtitle">{summarySentence}</p>
+            <p className="premium-kicker">{today}</p>
+            <h1 style={{ fontSize: 'clamp(1.6rem, 2.5vw, 2rem)', fontWeight: 800, letterSpacing: '-0.03em', marginTop: '0.2rem' }}>
+              Performance Overview
+            </h1>
           </div>
-          <button className="btn btn-primary" onClick={() => navigate('/log')}>
+          <button className="btn btn-primary" onClick={() => navigate('/log')} style={{ marginTop: '0.25rem' }}>
             <Zap size={16} /> Run Daily Log
           </button>
         </header>
 
-        <div className="premium-grid-two" style={{ gridTemplateColumns: 'minmax(0, 1.2fr) minmax(0, 0.8fr)' }}>
-          <section className="premium-section" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-            <p className="premium-kicker">Latest Performance</p>
-            <div className="premium-score-row" style={{ marginTop: '0.5rem' }}>
-              <span className="premium-score-value">{latestScore ?? '—'}</span>
-              <span className="premium-score-unit">/100</span>
-              <div 
-                className="premium-trend" 
-                style={{ 
-                  background: 'var(--bg-color)', 
-                  padding: '0.5rem 0.75rem', 
-                  borderRadius: '12px',
-                  border: '1px solid var(--panel-border)',
-                  color: trendColor,
+        {/* ── Hero row: score card + 3 stat pills ── */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.2fr) minmax(0, 0.8fr)', gap: '1rem' }}>
+
+          {/* Big dark score card */}
+          <div className="card card-hero" style={{ padding: '2rem 2.5rem', borderRadius: '20px', minHeight: '200px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+            <div>
+              <p className="stat-label">Latest Score</p>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.5rem', marginTop: '0.5rem' }}>
+                <span className="stat-number">{latestScore ?? '—'}</span>
+                <span style={{ fontSize: '1.25rem', color: 'rgba(255,255,255,0.35)', fontWeight: 600 }}>/100</span>
+                <div style={{
+                  marginLeft: 'auto',
+                  display: 'inline-flex', alignItems: 'center', gap: '0.4rem',
+                  background: 'rgba(255,255,255,0.1)',
+                  border: '1px solid rgba(255,255,255,0.12)',
+                  borderRadius: '10px',
+                  padding: '0.4rem 0.75rem',
+                  fontSize: '0.8rem',
                   fontWeight: 800,
-                  fontSize: '0.85rem'
-                }}
-              >
-                <TrendIcon size={16} /> {trends?.trend?.toUpperCase() || 'STABLE'}
-              </div>
-            </div>
-            <p className="premium-muted" style={{ marginTop: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <Target size={14} /> Tracking: <strong>{goal.title}</strong>
-            </p>
-          </section>
-
-          <section className="premium-section">
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-              <div className="premium-metric">
-                <p className="premium-metric-label">Execution Velocity</p>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                   <p className="premium-metric-value">{days.length}</p>
-                   <span className="premium-muted" style={{ fontSize: '0.75rem' }}>Days</span>
-                </div>
-              </div>
-              <div className="premium-metric">
-                <p className="premium-metric-label">Cognitive Focus</p>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                   <p className="premium-metric-value">{latestFocus ?? '—'}</p>
-                   <span className="premium-muted" style={{ fontSize: '0.75rem' }}>/ 5.0</span>
+                  color: trendColor,
+                  letterSpacing: '0.04em',
+                  textTransform: 'uppercase'
+                }}>
+                  <TrendIcon size={14} /> {trends?.trend || 'STABLE'}
                 </div>
               </div>
             </div>
-          </section>
-        </div>
-
-        <section className="premium-section">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-            <h2 className="premium-section-title"><Activity size={20} className="text-secondary" /> Volume Trend (7D)</h2>
-            <div style={{ display: 'flex', gap: '0.5rem' }}>
-               <span className="badge badge-purple">High Frequency</span>
+            <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '1rem' }}>
+              <p style={{ fontSize: '0.78rem', color: 'rgba(255,255,255,0.4)', marginBottom: '0.35rem', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                Tracking
+              </p>
+              <p style={{ fontSize: '0.95rem', fontWeight: 700, color: 'rgba(255,255,255,0.85)' }}>
+                {goal.title}
+              </p>
+              <p style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.4)', marginTop: '0.25rem' }}>{scoreLabel}</p>
             </div>
           </div>
-          {trendChartData.length > 0 ? (
-            <div style={{ height: 180, width: '100%' }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={trendChartData} margin={{ top: 5, right: 10, left: -20, bottom: 0 }}>
-                  <defs>
-                    <linearGradient id="colorScore" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="var(--accent-primary)" stopOpacity={0.2}/>
-                      <stop offset="95%" stopColor="var(--accent-primary)" stopOpacity={0}/>
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="var(--panel-border)" />
-                  <XAxis 
-                    dataKey="log_date" 
-                    tick={{ fill: 'var(--text-muted)', fontSize: 10, fontWeight: 600 }} 
-                    tickLine={false} 
-                    axisLine={false} 
-                    tickFormatter={(v) => new Date(v).toLocaleDateString('en', { weekday: 'short' })}
-                  />
-                  <YAxis domain={[0, 100]} hide />
-                  <Tooltip 
-                    contentStyle={{ background: 'var(--panel-bg)', borderRadius: '12px', border: '1px solid var(--panel-border)', fontSize: '0.75rem' }}
-                  />
-                  <Area type="monotone" dataKey="performance_score" stroke="var(--accent-primary)" strokeWidth={3} fillOpacity={1} fill="url(#colorScore)" />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
-          ) : (
-            <p className="premium-empty" style={{ textAlign: 'center', padding: '2rem 0' }}>Log more days to initialize telemetry.</p>
-          )}
-        </section>
 
+          {/* 3 stat pills stacked */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+            {[
+              { label: 'Days Logged', value: days.length, unit: 'sessions', icon: <Calendar size={16} /> },
+              { label: 'Cognitive Focus', value: latestFocus ?? '—', unit: '/ 5.0', icon: <Brain size={16} /> },
+              { label: '7-Day Average', value: weekAvg ?? '—', unit: 'pts', icon: <Activity size={16} /> },
+            ].map(({ label, value, unit, icon }) => (
+              <div key={label} className="card" style={{
+                background: 'var(--panel-bg)',
+                border: '1px solid var(--panel-border)',
+                borderRadius: '14px',
+                padding: '0.875rem 1.25rem',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                flex: 1,
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                  <span style={{ color: 'var(--accent-primary)' }}>{icon}</span>
+                  <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{label}</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.3rem' }}>
+                  <span style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--text-primary)', fontVariantNumeric: 'tabular-nums' }}>{value}</span>
+                  <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 600 }}>{unit}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* ── AI Briefing — promoted above chart ── */}
         <section className="premium-section">
-          <h2 className="premium-section-title"><Sparkles size={20} className="text-secondary" /> Cognitive Briefing</h2>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.25rem' }}>
+            <Sparkles size={18} color="var(--accent-primary)" />
+            <h2 style={{ fontSize: '1rem', fontWeight: 800, letterSpacing: '-0.01em' }}>AI Briefing</h2>
+            {insightsLoading && <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginLeft: 'auto' }}>Decoding…</span>}
+          </div>
           {insightsLoading ? (
-            <p className="premium-empty">Decoding signals…</p>
+            <div style={{ display: 'flex', gap: '1rem' }}>
+              {[1, 2, 3].map(i => (
+                <div key={i} style={{ flex: 1, height: '80px', background: 'var(--panel-border)', borderRadius: '12px', opacity: 0.4 }} />
+              ))}
+            </div>
           ) : insights.length > 0 ? (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1rem' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '0.875rem' }}>
               {insights.slice(0, 3).map((ins, i) => (
-                <div key={`insight-${i}`} style={{ padding: '1.25rem', background: 'var(--bg-color)', borderRadius: '16px', border: '1px solid var(--panel-border)', borderLeft: '4px solid var(--accent-primary)' }}>
-                   <p style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--accent-primary)', marginBottom: '0.5rem', textTransform: 'uppercase' }}>{ins.title}</p>
-                   <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>{ins.body}</p>
+                <div key={`insight-${i}`} style={{
+                  padding: '1.125rem 1.25rem',
+                  background: 'var(--bg-color)',
+                  borderRadius: '14px',
+                  border: '1px solid var(--panel-border)',
+                  borderLeft: '3px solid var(--accent-primary)',
+                }}>
+                  <p style={{ fontSize: '0.65rem', fontWeight: 800, color: 'var(--accent-primary)', marginBottom: '0.4rem', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{ins.title}</p>
+                  <p style={{ fontSize: '0.825rem', color: 'var(--text-secondary)', lineHeight: 1.55 }}>{ins.body}</p>
                 </div>
               ))}
             </div>
           ) : (
-            <p className="premium-empty">The AI is waiting for more behavioral density.</p>
+            <p className="premium-empty">Log more days to unlock AI insights.</p>
           )}
         </section>
 
-        <section className="premium-section">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-            <h2 className="premium-section-title"><Calendar size={20} className="text-secondary" /> Habit Density</h2>
-            <button className="btn btn-outline" style={{ padding: '0.35rem 0.75rem', fontSize: '0.75rem' }} onClick={() => navigate('/history')}>View History</button>
-          </div>
-          <div style={{ padding: '1.5rem', background: 'var(--bg-color)', borderRadius: '20px', border: '1px solid var(--panel-border)', maxWidth: 'fit-content' }}>
-            <Heatmap logs={heatmapLogs} />
-          </div>
-        </section>
+        {/* ── Bottom row: trend chart + heatmap ── */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.3fr) minmax(0, 0.7fr)', gap: '1rem', alignItems: 'start' }}>
+
+          {/* Trend chart */}
+          <section className="premium-section" style={{ padding: '1.75rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                <Activity size={18} color="var(--accent-primary)" />
+                <h2 style={{ fontSize: '1rem', fontWeight: 800, letterSpacing: '-0.01em' }}>Volume Trend</h2>
+              </div>
+              <span style={{
+                fontSize: '0.65rem', fontWeight: 800, letterSpacing: '0.08em',
+                background: 'var(--accent-subtle)', color: 'var(--accent-primary)',
+                padding: '0.25rem 0.7rem', borderRadius: '999px', textTransform: 'uppercase',
+                border: '1px solid var(--accent-border)'
+              }}>7 Days</span>
+            </div>
+            {trendChartData.length > 0 ? (
+              <div style={{ height: 160 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={trendChartData} margin={{ top: 4, right: 4, left: -24, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="scoreGrad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="var(--accent-primary)" stopOpacity={0.25} />
+                        <stop offset="100%" stopColor="var(--accent-primary)" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="var(--panel-border)" />
+                    <XAxis
+                      dataKey="log_date"
+                      tick={{ fill: 'var(--text-muted)', fontSize: 10, fontWeight: 600 }}
+                      tickLine={false}
+                      axisLine={false}
+                      tickFormatter={v => new Date(v).toLocaleDateString('en', { weekday: 'short' })}
+                    />
+                    <YAxis domain={[0, 100]} hide />
+                    <Tooltip
+                      contentStyle={{
+                        background: 'var(--panel-bg)',
+                        border: '1px solid var(--panel-border)',
+                        borderRadius: '10px',
+                        fontSize: '0.75rem',
+                        boxShadow: 'var(--card-shadow)'
+                      }}
+                      formatter={v => [`${v}`, 'Score']}
+                    />
+                    <Area
+                      type="monotone"
+                      dataKey="performance_score"
+                      stroke="var(--accent-primary)"
+                      strokeWidth={2.5}
+                      fill="url(#scoreGrad)"
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            ) : (
+              <p className="premium-empty" style={{ textAlign: 'center', padding: '3rem 0' }}>Log more days to see your trend.</p>
+            )}
+          </section>
+
+          {/* Heatmap */}
+          <section className="premium-section" style={{ padding: '1.75rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                <Calendar size={18} color="var(--accent-primary)" />
+                <h2 style={{ fontSize: '1rem', fontWeight: 800, letterSpacing: '-0.01em' }}>Habit Density</h2>
+              </div>
+              <button
+                className="btn btn-outline"
+                style={{ fontSize: '0.7rem', padding: '0.25rem 0.65rem', borderRadius: '8px' }}
+                onClick={() => navigate('/history')}
+              >
+                History
+              </button>
+            </div>
+            <div style={{ overflowX: 'auto' }}>
+              <Heatmap logs={heatmapLogs} />
+            </div>
+          </section>
+        </div>
+
       </div>
     </DashboardLayout>
   );
