@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { TrendingUp, TrendingDown, Minus, ArrowRight, Zap, BarChart2, FlaskConical } from 'lucide-react';
+import { TrendingUp, TrendingDown, Minus, ArrowRight, Zap, FlaskConical } from 'lucide-react';
 import DashboardLayout from '../components/DashboardLayout';
 import Heatmap from '../components/Heatmap';
 import { useAuth } from '../context/AuthContext';
@@ -132,120 +132,99 @@ function Dashboard() {
 
   const TrendIcon = trends?.trend === 'up' ? TrendingUp : trends?.trend === 'down' ? TrendingDown : Minus;
   const trendColor = trends?.trend === 'up' ? 'var(--success)' : trends?.trend === 'down' ? 'var(--danger)' : 'var(--text-muted)';
-
-  const MetricCard = ({ label, value, sub }) => (
-    <div style={{ background: 'var(--bg-color)', borderRadius: '8px', padding: '1rem 0.875rem', border: '1px solid var(--panel-border)' }}>
-      <p style={{ fontSize: '0.575rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '0.375rem' }}>{label}</p>
-      <p style={{ fontSize: '1.375rem', fontWeight: 800, color: 'var(--text-primary)', fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>{value}</p>
-      {sub && <p style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>{sub}</p>}
-    </div>
-  );
+  const latestScore = days?.[0] ? Math.round(days[0].performance_score || 0) : null;
+  const latestFocus = days?.[0] ? Number(days[0].focus_level || 0).toFixed(1) : null;
+  const summarySentence = latestScore == null
+    ? 'Log today to start your performance baseline.'
+    : latestScore >= 80
+      ? 'You are performing strongly today. Keep the same rhythm.'
+      : latestScore >= 65
+        ? 'You are steady today. One focused push can improve your score.'
+        : 'Today looks below baseline. Keep goals smaller and reduce friction.';
 
   return (
     <DashboardLayout goal={goal}>
-      {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '2rem' }}>
-        <div>
-          <p style={{ fontSize: '0.625rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: '0.25rem' }}>Performance Lab</p>
-          <h1 style={{ fontSize: '1.625rem', fontWeight: 800, letterSpacing: '-0.03em', marginBottom: '0.25rem' }}>Overview</h1>
-          <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>
-            Active experiment: <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{goal.title}</span>
-          </p>
+      <div className="premium-page">
+        <div className="premium-header">
+          <div>
+            <p className="premium-kicker">Daily View</p>
+            <h1 className="premium-title">How am I doing today?</h1>
+            <p className="premium-subtitle">{summarySentence}</p>
+          </div>
+          <button className="btn btn-primary" onClick={() => navigate('/log')} style={{ alignSelf: 'flex-start' }}>
+            <Zap size={14} fill="currentColor" /> Run Daily Log
+          </button>
         </div>
-        <button className="btn btn-primary" onClick={() => navigate('/log')} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.625rem 1.125rem', fontSize: '0.8125rem' }}>
-          <Zap size={14} fill="currentColor" /> Run Daily Log
-        </button>
-      </div>
 
-      {/* Primary Grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.55fr) minmax(0, 1fr)', gap: '1.25rem' }}>
-
-        {/* ── LEFT ── */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-
-          {/* 1. Performance Overview */}
-          <div className="card" style={{ padding: '1.375rem' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.125rem' }}>
-              <h3 style={{ fontSize: '0.65rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Performance Overview</h3>
-              <span style={{ fontSize: '0.7rem', color: trendColor, fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                <TrendIcon size={13} /> {trends?.trend || 'stable'}
+        <section className="premium-section">
+          <div className="premium-hero-score">
+            <p className="premium-kicker">Latest Performance</p>
+            <div className="premium-score-row">
+              <span className="premium-score-value">{latestScore ?? '—'}</span>
+              <span className="premium-score-unit">/100</span>
+              <span className="premium-trend" style={{ color: trendColor }}>
+                <TrendIcon size={14} /> {trends?.trend || 'stable'} trend
               </span>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.625rem' }}>
-              <MetricCard label="Days" value={`${days.length || 0}`} sub="loaded" />
-              <MetricCard label="Latest" value={days?.[0] ? Math.round(days[0].performance_score || 0) : 0} sub="/100" />
-              <MetricCard label="Focus" value={days?.[0] ? (days[0].focus_level || 0) : 0} sub="/5" />
-              <MetricCard label="Trend" value={trends?.trend || 'stable'} sub="7d" />
+            <p className="premium-muted">Goal: <strong>{goal.title}</strong></p>
+          </div>
+        </section>
+
+        <section className="premium-section">
+          <div className="premium-metric-row">
+            <div className="premium-metric">
+              <p className="premium-metric-label">Days logged</p>
+              <p className="premium-metric-value">{days.length}</p>
+            </div>
+            <div className="premium-metric">
+              <p className="premium-metric-label">Latest focus</p>
+              <p className="premium-metric-value">{latestFocus ?? '—'}</p>
+            </div>
+            <div className="premium-metric">
+              <p className="premium-metric-label">7-day trend</p>
+              <p className="premium-metric-value" style={{ color: trendColor }}>{trends?.trend || 'stable'}</p>
             </div>
           </div>
+        </section>
 
-          {/* 2. 7-Day Performance Trend */}
-          <div className="card" style={{ padding: '1.375rem' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-              <h3 style={{ fontSize: '0.65rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Performance Trend — Last 7 Days</h3>
-              <BarChart2 size={13} color="var(--text-muted)" />
-            </div>
-            {trends?.data && trends.data.length > 0 ? (
-              <div>
-                <Sparkline data={trends.data} />
-                <div style={{ display: 'grid', gridTemplateColumns: `repeat(${trends.data.length}, 1fr)`, gap: '0.25rem', marginTop: '0.625rem' }}>
-                  {trends.data.map((d, i) => (
-                    <div key={`trend-${d.log_date}-${i}`} style={{ textAlign: 'center' }}>
-                      <p style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-primary)', fontVariantNumeric: 'tabular-nums' }}>{Math.round(d.performance_score || 0)}</p>
-                      <p style={{ fontSize: '0.55rem', color: 'var(--text-muted)', marginTop: '1px' }}>{new Date(d.log_date).toLocaleDateString('en', { weekday: 'short' })}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ) : (
-              <p style={{ color: 'var(--text-muted)', fontSize: '0.8125rem' }}>No trend data yet. Submit your first Daily Log to start tracking.</p>
-            )}
-          </div>
-
-          {/* 3. Protocol Tasks */}
-          <div className="card" style={{ padding: '1.375rem' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-              <h3 style={{ fontSize: '0.65rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Today’s Protocol</h3>
-              <button className="btn btn-outline" style={{ fontSize: '0.65rem', padding: '0.275rem 0.6rem' }} onClick={() => navigate('/log')}>Edit / Log</button>
-            </div>
-            <p style={{ color: 'var(--text-muted)', fontSize: '0.8125rem' }}>
-              Add tasks for today in “Run Daily Log”, then submit the daily summary to compute your score.
-            </p>
-          </div>
-        </div>
-
-        {/* ── RIGHT ── */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-
-          {/* 4. AI Performance Insights */}
-          <div className="card" style={{ padding: '1.375rem' }}>
-            <h3 style={{ fontSize: '0.65rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '1.125rem' }}>AI Performance Insights</h3>
-            {insightsLoading ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                {[90, 70, 80].map((w, i) => (
-                  <div key={i} style={{ display: 'flex', gap: '0.625rem', alignItems: 'flex-start' }}>
-                    <div style={{ width: '4px', height: '4px', borderRadius: '50%', background: 'var(--panel-border)', marginTop: '6px', flexShrink: 0 }} />
-                    <div style={{ height: '13px', background: 'var(--input-bg)', borderRadius: '4px', width: `${w}%`, animation: 'fadeIn 0.5s' }} />
+        <section className="premium-section">
+          <h2 className="premium-section-title">Performance trend</h2>
+          {trends?.data && trends.data.length > 0 ? (
+            <div style={{ paddingTop: '0.5rem' }}>
+              <Sparkline data={trends.data} />
+              <div className="premium-trend-labels">
+                {trends.data.map((d, i) => (
+                  <div key={`trend-${d.log_date}-${i}`} style={{ textAlign: 'center' }}>
+                    <p style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-primary)' }}>{Math.round(d.performance_score || 0)}</p>
+                    <p style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{new Date(d.log_date).toLocaleDateString('en', { weekday: 'short' })}</p>
                   </div>
                 ))}
               </div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.875rem' }}>
-                {insights.length > 0 ? insights.map((ins, i) => (
-                  <div key={`insight-${i}`} style={{ display: 'flex', gap: '0.625rem', alignItems: 'flex-start' }}>
-                    <div style={{ width: '4px', height: '4px', borderRadius: '50%', background: 'var(--accent-primary)', marginTop: '7px', flexShrink: 0 }} />
-                    <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-                      <span style={{ fontWeight: 800, color: 'var(--text-primary)' }}>{ins.title}:</span> {ins.body}
-                    </p>
-                  </div>
-                )) : (
-                  <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', lineHeight: 1.6 }}>Submit performance logs to generate analyst observations.</p>
-                )}
-              </div>
-            )}
-          </div>
+            </div>
+          ) : (
+            <p className="premium-empty">Log more days to unlock this insight.</p>
+          )}
+        </section>
 
-          {/* 5. Consistency Heatmap */}
+        <section className="premium-section">
+          <h2 className="premium-section-title">AI Brief</h2>
+          {insightsLoading ? (
+            <p className="premium-empty">Preparing your brief…</p>
+          ) : insights.length > 0 ? (
+            <div className="premium-insight-list">
+              {insights.slice(0, 3).map((ins, i) => (
+                <p key={`insight-${i}`} className="premium-insight-item">
+                  <span>{ins.title}:</span> {ins.body}
+                </p>
+              ))}
+            </div>
+          ) : (
+            <p className="premium-empty">Log more days to unlock this insight.</p>
+          )}
+        </section>
+
+        <section className="premium-section">
+          <h2 className="premium-section-title">Consistency Calendar</h2>
           <Heatmap logs={(days || []).map(d => ({
             log_date: d.date,
             task_done: (d.performance_score || 0) >= 70,
@@ -253,7 +232,7 @@ function Dashboard() {
             mood: null,
             notes: d.notes,
           }))} />
-        </div>
+        </section>
       </div>
     </DashboardLayout>
   );

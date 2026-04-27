@@ -199,9 +199,9 @@ export default function PerformanceInput() {
 
     return (
       <DashboardLayout goal={goal}>
-        <div style={{ maxWidth: '640px', margin: '0 auto', paddingTop: '4rem' }} className="fade-in">
-          <div style={{ background: 'var(--panel-bg)', border: '1px solid var(--panel-border)', borderRadius: '12px', padding: '2.5rem' }}>
-            <p style={{ fontSize: '0.65rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: '1.5rem' }}>Output Summary — {new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</p>
+        <div className="premium-page fade-in">
+          <section className="premium-section">
+            <p className="premium-kicker">Today Summary — {new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</p>
 
             {/* Score */}
             <div style={{ display: 'flex', alignItems: 'flex-end', gap: '0.5rem', marginBottom: '2rem', paddingBottom: '2rem', borderBottom: '1px solid var(--panel-border)' }}>
@@ -224,13 +224,10 @@ export default function PerformanceInput() {
               ))}
             </div>
 
-            <button
-              onClick={() => navigate('/dashboard')}
-              style={{ width: '100%', padding: '0.875rem', background: 'var(--accent-primary)', color: '#fff', border: 'none', borderRadius: '8px', fontSize: '0.875rem', fontWeight: 700, cursor: 'pointer', letterSpacing: '0.02em' }}
-            >
+            <button onClick={() => navigate('/dashboard')} className="btn btn-primary" style={{ width: '100%', marginTop: '0.5rem' }}>
               Return to Overview
             </button>
-          </div>
+          </section>
         </div>
       </DashboardLayout>
     );
@@ -238,23 +235,23 @@ export default function PerformanceInput() {
 
   return (
     <DashboardLayout goal={goal}>
-      <div style={{ maxWidth: '640px', margin: '0 auto', paddingTop: '3rem', paddingBottom: '4rem' }} className="fade-in">
+      <div className="premium-page fade-in">
 
         {/* Header */}
-        <div style={{ marginBottom: '2.5rem' }}>
+        <div className="premium-header" style={{ marginBottom: '2rem' }}>
           <button onClick={() => navigate('/dashboard')} style={{ display: 'flex', alignItems: 'center', gap: '0.375rem', background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.8125rem', marginBottom: '1.5rem', padding: 0 }}>
             <ArrowLeft size={14} /> Overview
           </button>
-          <p style={{ fontSize: '0.6875rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: '0.5rem' }}>
+          <p className="premium-kicker">
             {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
           </p>
-          <h1 style={{ fontSize: '1.75rem', fontWeight: 800, letterSpacing: '-0.03em', color: 'var(--text-primary)', marginBottom: '0.25rem' }}>Daily Performance Input</h1>
-          <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>
-            Add today’s protocol tasks, then submit your daily summary to compute a deterministic score.
+          <h1 className="premium-title">What happened today?</h1>
+          <p className="premium-subtitle">
+            Capture tasks, focus, friction, and notes in one clean daily log.
           </p>
         </div>
 
-        <div style={{ background: 'var(--panel-bg)', border: '1px solid var(--panel-border)', borderRadius: '12px', padding: '2rem' }}>
+        <section className="premium-section">
 
           {/* Tasks for today */}
           <div style={section}>
@@ -319,7 +316,7 @@ export default function PerformanceInput() {
           </div>
 
           {/* Divider */}
-          <div style={{ borderTop: '1px solid var(--panel-border)', marginBottom: '2.5rem' }} />
+          <div style={{ borderTop: '1px solid var(--panel-border)', marginBottom: '2rem' }} />
 
           {/* Variable 3: Focus Level */}
           <div style={section}>
@@ -341,7 +338,7 @@ export default function PerformanceInput() {
             </div>
           </div>
 
-          <div style={{ borderTop: '1px solid var(--panel-border)', marginBottom: '2.5rem' }} />
+          <div style={{ borderTop: '1px solid var(--panel-border)', marginBottom: '2rem' }} />
 
           {/* Variable 4: Friction Variables */}
           <div style={section}>
@@ -359,7 +356,7 @@ export default function PerformanceInput() {
             </div>
           </div>
 
-          <div style={{ borderTop: '1px solid var(--panel-border)', marginBottom: '2.5rem' }} />
+          <div style={{ borderTop: '1px solid var(--panel-border)', marginBottom: '2rem' }} />
 
           {/* Variable 5: Observational Notes */}
           <div style={{ marginBottom: '2rem' }}>
@@ -378,22 +375,10 @@ export default function PerformanceInput() {
           </div>
 
           {/* Submit */}
-          <button
-            onClick={handleSubmit}
-            disabled={submitting}
-            style={{
-              width: '100%', padding: '0.9375rem',
-              background: submitting ? 'var(--panel-border)' : 'var(--accent-primary)',
-              color: submitting ? 'var(--text-muted)' : '#fff',
-              border: 'none', borderRadius: '8px', fontSize: '0.875rem', fontWeight: 700,
-              cursor: submitting ? 'not-allowed' : 'pointer', transition: 'all 0.2s',
-              letterSpacing: '0.04em', textTransform: 'uppercase',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem'
-            }}
-          >
+          <button onClick={handleSubmit} disabled={submitting} className="btn btn-primary" style={{ width: '100%' }}>
             {submitting ? 'Processing...' : <><ArrowRight size={16} /> Submit Performance Log</>}
           </button>
-        </div>
+        </section>
       </div>
     </DashboardLayout>
   );

@@ -1,46 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { 
-  Sparkles, 
-  Check, 
-  AlertTriangle, 
-  ChevronDown, 
-  ChevronRight, 
-  Activity, 
-  Zap, 
-  Plus, 
-  Lock,
-  Clock,
-  Target,
-  BarChart2,
-  MoreVertical
-} from 'lucide-react';
 import DashboardLayout from '../components/DashboardLayout';
 import { useAuth } from '../context/AuthContext';
-
-const CATEGORY_STYLES = {
-  primary: {
-    color: 'var(--accent-primary)',
-    bg: 'rgba(99, 102, 241, 0.1)',
-    label: 'Primary Objective',
-    icon: <Target size={14} />,
-    weight: '50%'
-  },
-  support: {
-    color: '#38bdf8',
-    bg: 'rgba(56, 189, 248, 0.1)',
-    label: 'Support Variable',
-    icon: <Activity size={14} />,
-    weight: '25%'
-  },
-  optimize: {
-    color: '#34d399',
-    bg: 'rgba(52, 211, 153, 0.1)',
-    label: 'Optimization Task',
-    icon: <Zap size={14} />,
-    weight: '15%'
-  }
-};
 
 function AIPlan() {
   const [loading, setLoading] = useState(false);
@@ -49,23 +10,38 @@ function AIPlan() {
 
   useEffect(() => {
     // v2 backend does not implement roadmap/todos endpoints.
-  }, [token, navigate, logout]);
+  }, [token, navigate]);
 
   return (
     <DashboardLayout goal={null}>
-      <div style={{ maxWidth: 720 }}>
-        <h1 style={{ fontSize: '1.75rem', fontWeight: 900, marginBottom: '0.5rem' }}>AI Roadmap</h1>
-        <p style={{ color: 'var(--text-secondary)', marginBottom: '1.5rem' }}>
-          In v2, tasks are modeled as `daily_tasks` per date. The legacy roadmap/todos endpoints are intentionally not available.
-        </p>
-        <div className="card" style={{ padding: '1.25rem' }}>
-          <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem', lineHeight: 1.6 }}>
-            Use <strong>Run Daily Log</strong> to add tasks for today via <code>POST /api/tasks/custom</code>, then submit the daily summary via <code>POST /api/logs</code>.
+      <div className="premium-page">
+        <div className="premium-header">
+          <div>
+            <p className="premium-kicker">Roadmap</p>
+            <h1 className="premium-title">What should I focus on next?</h1>
+            <p className="premium-subtitle">
+              Your next action is to capture today clearly, then iterate tomorrow based on the result.
+            </p>
+          </div>
+        </div>
+        <section className="premium-section">
+          <p className="premium-muted" style={{ lineHeight: 1.7 }}>
+            In v2, roadmap execution is represented by `daily_tasks` and daily summary logs.
+            Plan, track completion, and submit outcomes through the Daily Log flow.
           </p>
           <button className="btn btn-primary" style={{ marginTop: '1rem' }} onClick={() => navigate('/log')}>
-            Go to Daily Log
+            Open Daily Log
           </button>
-        </div>
+        </section>
+        <section className="premium-section">
+          <h2 className="premium-section-title">Recommended sequence</h2>
+          <div className="premium-insight-list">
+            <p className="premium-insight-item"><span>1.</span> Add 2-4 focused tasks for today.</p>
+            <p className="premium-insight-item"><span>2.</span> Mark each task done or pending honestly.</p>
+            <p className="premium-insight-item"><span>3.</span> Submit your log and review score + brief in Analysis.</p>
+          </div>
+          {loading && <p className="premium-muted">Loading…</p>}
+        </section>
       </div>
     </DashboardLayout>
   );
