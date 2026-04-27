@@ -239,7 +239,7 @@ function Mastery() {
                 <div key={day.date} style={{ 
                   display: 'flex', 
                   alignItems: 'center', 
-                  justify-content: 'space-between', 
+                  justifyContent: 'space-between', 
                   padding: '1.25rem', 
                   background: 'var(--bg-color)', 
                   borderRadius: '16px', 
