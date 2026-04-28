@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { 
   TrendingUp, TrendingDown, Minus, ArrowRight, Zap, 
   Target, FlaskConical, Calendar, Brain, Activity, Sparkles,
-  Flame, Clock
+  Flame, Clock, CheckCircle2
 } from 'lucide-react';
 import { 
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, 
@@ -14,13 +14,6 @@ import Heatmap from '../components/Heatmap';
 import { useAuth } from '../context/AuthContext';
 import { API_BASE, authHeaders, safeJson } from '../api/base';
 
-// ── colour palette for stat pills ─────────────────────────────
-const PILL_COLORS = [
-  { bg: 'linear-gradient(135deg, #6d3ef7 0%, #9b6dff 100%)', fg: '#fff', shadow: '0 8px 24px rgba(109,62,247,0.35)' },
-  { bg: 'linear-gradient(135deg, #0ea5e9 0%, #38bdf8 100%)', fg: '#fff', shadow: '0 8px 24px rgba(14,165,233,0.3)' },
-  { bg: 'linear-gradient(135deg, #10b981 0%, #34d399 100%)', fg: '#fff', shadow: '0 8px 24px rgba(16,185,129,0.3)' },
-];
-
 function Dashboard() {
   const [goal, setGoal] = useState(null);
   const [trends, setTrends] = useState(null);
@@ -29,58 +22,79 @@ function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [insightsLoading, setInsightsLoading] = useState(true);
 
-  const { token, logout } = useAuth();
+  const { token, logout, updateUser } = useAuth();
   const navigate = useNavigate();
 
-  useEffect(() => {
-    const storedGoalId = localStorage.getItem('growthpath_goal_id');
-    const fetchData = async () => {
-      try {
-        const headers = authHeaders(token);
-        let goalId = storedGoalId;
-        if (!goalId) {
-          const goalsRes = await fetch(`${API_BASE}/goals`, { headers });
-          const goalsPayload = await safeJson(goalsRes);
-          const goals = goalsPayload?.goals || [];
-          const active = goalsPayload?.active_goal_id;
-          if (active) {
-            goalId = String(active);
-            localStorage.setItem('growthpath_goal_id', goalId);
-          } else if (goals.length > 0) {
-            goalId = String(goals[0].id);
-            localStorage.setItem('growthpath_goal_id', goalId);
-          } else { navigate('/setup'); return; }
+  const fetchData = async () => {
+    try {
+      const headers = authHeaders(token);
+      let goalId = localStorage.getItem('growthpath_goal_id');
+      
+      // Initial goals fetch to ensure we have a goal
+      const goalsRes = await fetch(`${API_BASE}/goals`, { headers });
+      if (goalsRes.status === 401) { logout(); navigate('/login'); return; }
+      const goalsPayload = await safeJson(goalsRes);
+      const goals = goalsPayload?.goals || [];
+      const active = goalsPayload?.active_goal_id;
+
+      if (!goalId) {
+        if (active) {
+          goalId = String(active);
+        } else if (goals.length > 0) {
+          goalId = String(goals[0].id);
+        } else {
+          navigate('/setup');
+          return;
         }
+        localStorage.setItem('growthpath_goal_id', goalId);
+      }
 
-        const goalsRes = await fetch(`${API_BASE}/goals`, { headers });
-        if (goalsRes.status === 401) { logout(); navigate('/login'); return; }
-        const goalsPayload = await safeJson(goalsRes);
-        const goals = goalsPayload?.goals || [];
-        const goalData = goals.find(g => String(g.id) === String(goalId)) || goals[0] || null;
-        if (!goalData) { navigate('/setup'); return; }
-        setGoal(goalData);
+      const goalData = goals.find(g => String(g.id) === String(goalId)) || goals[0] || null;
+      if (!goalData) { navigate('/setup'); return; }
+      setGoal(goalData);
 
-        const [trendsRes, logsRes, insightsRes] = await Promise.all([
-          fetch(`${API_BASE}/performance/trends?goal_id=${goalData.id}&days=7`, { headers }),
-          fetch(`${API_BASE}/logs?goal_id=${goalData.id}&limit=60`, { headers }),
-          fetch(`${API_BASE}/ai/insights?goal_id=${goalData.id}`, { headers }),
-        ]);
+      const [trendsRes, logsRes, insightsRes] = await Promise.all([
+        fetch(`${API_BASE}/performance/trends?goal_id=${goalData.id}&days=7`, { headers }),
+        fetch(`${API_BASE}/logs?goal_id=${goalData.id}&limit=60`, { headers }),
+        fetch(`${API_BASE}/ai/insights?goal_id=${goalData.id}`, { headers }),
+      ]);
 
-        if (trendsRes.ok) { const t = await safeJson(trendsRes); setTrends(t?.trends || null); }
-        if (logsRes.ok) { const l = await safeJson(logsRes); setDays(l?.days || []); }
+      if (trendsRes.ok) { const t = await safeJson(trendsRes); setTrends(t?.trends || null); }
+      if (logsRes.ok) { const l = await safeJson(logsRes); setDays(l?.days || []); }
 
-        setInsightsLoading(true);
-        if (insightsRes.ok) {
-          const ins = await safeJson(insightsRes);
-          setInsights(ins?.insights || []);
-        } else { setInsights([]); }
-        setInsightsLoading(false);
-      } catch (err) {
-        console.error('Dashboard load error:', err);
-      } finally { setLoading(false); }
-    };
+      setInsightsLoading(true);
+      if (insightsRes.ok) {
+        const ins = await safeJson(insightsRes);
+        setInsights(ins?.insights || []);
+      } else { setInsights([]); }
+      setInsightsLoading(false);
+    } catch (err) {
+      console.error('Dashboard load error:', err);
+    } finally { setLoading(false); }
+  };
+
+  useEffect(() => {
     fetchData();
   }, [token, navigate, logout]);
+  
+  const handleToggleTask = async (taskId) => {
+    try {
+      const res = await fetch(`${API_BASE}/tasks/${taskId}/toggle`, {
+        method: 'PUT',
+        headers: authHeaders(token)
+      });
+      if (res.ok) {
+        const data = await safeJson(res);
+        if (data.total_xp !== undefined) {
+          updateUser({ total_xp: data.total_xp, level: data.level });
+        }
+        // Re-fetch everything to ensure score and tasks are in sync
+        fetchData();
+      }
+    } catch (err) {
+      console.error('Toggle error:', err);
+    }
+  };
 
   const heatmapLogs = useMemo(() => (
     (days || []).map(d => ({
@@ -91,6 +105,26 @@ function Dashboard() {
       notes: d.notes,
     }))
   ), [days]);
+
+  const streak = useMemo(() => {
+    if (!days || days.length === 0) return 0;
+    const todayStr = new Date().toISOString().slice(0, 10);
+    let count = 0;
+    let cursor = new Date(todayStr);
+    const dateSet = new Set(days.map(d => d.date?.slice(0, 10)));
+    while (dateSet.has(cursor.toISOString().slice(0, 10))) {
+      count++;
+      cursor.setDate(cursor.getDate() - 1);
+    }
+    return count;
+  }, [days]);
+
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayData = days.find(d => d.date?.startsWith(todayStr));
+  const loggedToday = !!todayData;
+  const todayTasks = todayData?.tasks || [];
+  const uncompletedTasks = todayTasks.filter(t => !t.is_completed);
+  const dashboardTasks = uncompletedTasks.slice(0, 3);
 
   if (loading) return (
     <DashboardLayout goal={goal}>
@@ -114,7 +148,6 @@ function Dashboard() {
     </DashboardLayout>
   );
 
-  // ── Derived values ─────────────────────────────────────────────
   const TrendIcon = trends?.trend === 'up' ? TrendingUp : trends?.trend === 'down' ? TrendingDown : Minus;
   const trendColor = trends?.trend === 'up' ? '#34d399' : trends?.trend === 'down' ? '#f87171' : '#8878b0';
   const latestScore = days?.[0] ? Math.round(days[0].performance_score || 0) : null;
@@ -123,256 +156,266 @@ function Dashboard() {
   const weekAvg = trendChartData.length > 0
     ? Math.round(trendChartData.reduce((s, d) => s + (d.performance_score || 0), 0) / trendChartData.length)
     : null;
-  const today = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
-
-  const scoreLabel = latestScore == null ? 'Log today to establish your baseline.'
-    : latestScore >= 80 ? 'Peak state detected. Exceptional execution.'
-    : latestScore >= 65 ? 'Solid trajectory. One more push.'
-    : 'Below baseline. Reduce friction today.';
+  const todayLabel = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
 
   const statPills = [
-    { label: 'Days Logged', value: days.length, unit: 'sessions', icon: <Flame size={18} /> },
-    { label: 'Cognitive Focus', value: latestFocus ?? '—', unit: '/ 5.0', icon: <Brain size={18} /> },
-    { label: '7-Day Avg', value: weekAvg ?? '—', unit: 'pts', icon: <Activity size={18} /> },
+    { label: 'Days Logged', value: days.length, unit: 'sessions', icon: <Flame size={18} />, color: 'var(--accent-primary)' },
+    { label: 'Focus Level', value: latestFocus ?? '—', unit: '/ 5.0', icon: <Brain size={18} />, color: '#0ea5e9' },
+    { label: '7-Day Avg', value: weekAvg ?? '—', unit: 'pts', icon: <Activity size={18} />, color: '#10b981' },
+    { label: 'Current Streak', value: streak, unit: streak === 1 ? 'day' : 'days', icon: <Zap size={18} />, color: '#f59e0b' },
   ];
 
   return (
-    <DashboardLayout goal={goal}>
-      <div className="premium-page">
-
-        {/* ── Topbar ───────────────────────────────────────────── */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div>
-            <p style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--accent-primary)', textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: '0.2rem' }}>
-              {today}
-            </p>
-            <h1 style={{ fontSize: '1.75rem', fontWeight: 800, letterSpacing: '-0.03em', color: 'var(--text-primary)' }}>
-              Performance Overview
-            </h1>
+    <DashboardLayout goal={goal} overlayClass="bg-dashboard">
+      <div className="premium-page fade-in">
+        
+        {!loggedToday && (
+          <div className="glass-card" style={{ 
+            padding: '1.25rem 2rem', background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(99, 102, 241, 0.05) 100%)',
+            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+            border: '1px solid var(--accent-border)', marginBottom: '1.5rem'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem' }}>
+              <div style={{ width: '44px', height: '44px', background: 'var(--accent-primary)', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', boxShadow: '0 4px 12px rgba(99, 102, 241, 0.3)' }}>
+                <Clock size={22} />
+              </div>
+              <div>
+                <p style={{ fontWeight: 800, color: 'var(--text-primary)', fontSize: '1rem' }}>Daily log needed</p>
+                <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>Please log your progress for today to keep your streak alive.</p>
+              </div>
+            </div>
+            <button className="btn btn-primary" onClick={() => navigate('/log')}>Log Today's Progress</button>
           </div>
-          <button className="btn btn-primary" onClick={() => navigate('/log')} style={{ gap: '0.5rem', padding: '0.65rem 1.25rem' }}>
-            <Zap size={16} /> Run Daily Log
-          </button>
+        )}
+
+        <div className="premium-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '2.5rem' }}>
+          <div>
+            <div className="premium-kicker">Daily Progress</div>
+            <h1 className="premium-title" style={{ fontSize: '2.5rem', fontWeight: 900, letterSpacing: '-0.04em' }}>{goal.title}</h1>
+            <p className="premium-subtitle" style={{ marginTop: '0.4rem', fontWeight: 500, opacity: 0.7 }}>{todayLabel}</p>
+          </div>
+          <div style={{ textAlign: 'right' }}>
+            <span className="badge badge-purple" style={{ padding: '0.5rem 1.25rem', fontSize: '0.85rem', borderRadius: '10px' }}>{goal.category}</span>
+          </div>
         </div>
 
-        {/* ── Hero Row ─────────────────────────────────────────── */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '1rem', alignItems: 'stretch' }}>
-
-          {/* Big dark score card — spans 2 columns */}
-          <div style={{
-            gridColumn: 'span 2',
-            borderRadius: '20px',
-            background: 'linear-gradient(145deg, #0e0921 0%, #180f3a 50%, #0b1022 100%)',
-            padding: '2rem',
-            position: 'relative',
-            overflow: 'hidden',
-            display: 'flex',
-            flexDirection: 'column',
-            justifyContent: 'space-between',
-            minHeight: '200px',
-            boxShadow: '0 20px 60px rgba(0,0,0,0.25)',
-          }}>
-            {/* Glow orb */}
-            <div style={{
-              position: 'absolute', top: '-40px', right: '-40px',
-              width: '200px', height: '200px',
-              background: 'radial-gradient(circle, rgba(109,62,247,0.4) 0%, transparent 70%)',
-              pointerEvents: 'none',
-            }} />
-            {/* Second orb */}
-            <div style={{
-              position: 'absolute', bottom: '-30px', left: '30%',
-              width: '150px', height: '150px',
-              background: 'radial-gradient(circle, rgba(14,165,233,0.2) 0%, transparent 70%)',
-              pointerEvents: 'none',
-            }} />
-
-            <div style={{ position: 'relative', zIndex: 1 }}>
-              <p style={{ fontSize: '0.65rem', fontWeight: 800, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: '0.5rem' }}>
-                Latest Score
-              </p>
-              <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.5rem' }}>
-                <span style={{
-                  fontFamily: "'Sora', sans-serif",
-                  fontSize: 'clamp(3.5rem, 6vw, 5rem)',
-                  fontWeight: 800,
-                  lineHeight: 1,
-                  color: '#ffffff',
-                  letterSpacing: '-0.04em',
-                  fontVariantNumeric: 'tabular-nums',
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1.5rem', marginBottom: '2rem' }}>
+          {statPills.map((pill, idx) => (
+            <div key={idx} className="glass-card" style={{ padding: '1.75rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ 
+                  width: '40px', height: '40px', background: 'rgba(99, 102, 241, 0.05)', 
+                  borderRadius: '12px', display: 'flex', alignItems: 'center', 
+                  justifyContent: 'center', color: pill.color, border: `1px solid ${pill.color}22`
                 }}>
-                  {latestScore ?? '—'}
-                </span>
-                <span style={{ fontSize: '1.25rem', color: 'rgba(255,255,255,0.3)', fontWeight: 600 }}>/100</span>
-                <div style={{
-                  marginLeft: 'auto',
-                  display: 'inline-flex', alignItems: 'center', gap: '0.35rem',
-                  background: `${trendColor}18`,
-                  border: `1px solid ${trendColor}40`,
-                  borderRadius: '8px',
-                  padding: '0.35rem 0.75rem',
-                  fontSize: '0.75rem', fontWeight: 800,
-                  color: trendColor,
-                  letterSpacing: '0.06em',
-                  textTransform: 'uppercase',
-                }}>
-                  <TrendIcon size={13} /> {trends?.trend || 'STABLE'}
+                  {pill.icon}
                 </div>
+                <TrendingUp size={16} color="#10b981" />
               </div>
-            </div>
-
-            <div style={{ position: 'relative', zIndex: 1, paddingTop: '1.25rem', borderTop: '1px solid rgba(255,255,255,0.07)', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
               <div>
-                <p style={{ fontSize: '0.65rem', color: 'rgba(255,255,255,0.35)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '0.25rem' }}>Tracking</p>
-                <p style={{ fontSize: '0.9rem', fontWeight: 700, color: 'rgba(255,255,255,0.8)', maxWidth: '220px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{goal.title}</p>
-              </div>
-              <p style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.35)', fontStyle: 'italic', textAlign: 'right', maxWidth: '160px', lineHeight: 1.4 }}>{scoreLabel}</p>
-            </div>
-          </div>
-
-          {/* 3 colored stat pills */}
-          {statPills.map(({ label, value, unit, icon }, i) => (
-            <div key={label} style={{
-              borderRadius: '20px',
-              background: PILL_COLORS[i].bg,
-              padding: '1.5rem',
-              display: 'flex',
-              flexDirection: 'column',
-              justifyContent: 'space-between',
-              boxShadow: PILL_COLORS[i].shadow,
-              position: 'relative',
-              overflow: 'hidden',
-            }}>
-              <div style={{
-                position: 'absolute', top: '-30px', right: '-30px',
-                width: '120px', height: '120px',
-                background: 'rgba(255,255,255,0.08)',
-                borderRadius: '50%',
-              }} />
-              <div style={{ width: '36px', height: '36px', background: 'rgba(255,255,255,0.15)', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', marginBottom: '1rem', position: 'relative', zIndex: 1 }}>
-                {icon}
-              </div>
-              <div style={{ position: 'relative', zIndex: 1 }}>
-                <p style={{ fontSize: '0.65rem', fontWeight: 700, color: 'rgba(255,255,255,0.65)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '0.35rem' }}>{label}</p>
-                <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.35rem' }}>
-                  <span style={{ fontFamily: "'Sora', sans-serif", fontSize: '2.25rem', fontWeight: 800, color: '#fff', lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>{value}</span>
-                  <span style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.55)', fontWeight: 600 }}>{unit}</span>
+                <p className="premium-mini-title" style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>{pill.label}</p>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.5rem' }}>
+                  <span style={{ fontSize: '2.25rem', fontWeight: 900, color: 'var(--text-primary)', letterSpacing: '-0.03em' }}>{pill.value}</span>
+                  <span style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-muted)' }}>{pill.unit}</span>
                 </div>
               </div>
             </div>
           ))}
         </div>
 
-        {/* ── AI Briefing ──────────────────────────────────────── */}
-        <div style={{
-          background: 'var(--panel-bg)',
-          border: '1px solid var(--panel-border)',
-          borderRadius: '20px',
-          padding: '1.75rem',
-          boxShadow: 'var(--card-shadow)',
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.25rem' }}>
-            <div style={{ width: '32px', height: '32px', background: 'var(--accent-subtle)', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <Sparkles size={16} color="var(--accent-primary)" />
+        <div className="premium-section" style={{ marginBottom: '2rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+            <div style={{ width: '40px', height: '40px', background: 'var(--accent-subtle)', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Sparkles size={20} color="var(--accent-primary)" />
             </div>
-            <h2 style={{ fontSize: '1rem', fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>AI Briefing</h2>
-            {insightsLoading && <span style={{ marginLeft: 'auto', fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 600 }}>Decoding signals…</span>}
+            <div>
+              <h2 className="premium-section-title" style={{ fontSize: '1.125rem' }}>AI Summary</h2>
+              <p className="premium-muted">Helpful insights from your recent progress.</p>
+            </div>
+            {insightsLoading && <span className="premium-muted" style={{ marginLeft: 'auto', fontWeight: 700, fontSize: '0.75rem' }}>Analyzing data...</span>}
           </div>
           {insightsLoading ? (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.875rem' }}>
-              {[1,2,3].map(i => <div key={i} style={{ height: '72px', background: 'var(--panel-border)', borderRadius: '12px', opacity: 0.5 }} />)}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem' }}>
+              {[1,2,3].map(i => <div key={i} className="insight-skeleton" style={{ height: '90px', borderRadius: '16px' }} />)}
             </div>
           ) : insights.length > 0 ? (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '0.875rem' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1rem' }}>
               {insights.slice(0, 3).map((ins, i) => (
-                <div key={`insight-${i}`} style={{
-                  padding: '1.125rem 1.25rem',
-                  background: 'var(--bg-color)',
-                  borderRadius: '14px',
-                  border: '1px solid var(--panel-border)',
-                  borderLeft: '3px solid var(--accent-primary)',
-                }}>
-                  <p style={{ fontSize: '0.65rem', fontWeight: 800, color: 'var(--accent-primary)', marginBottom: '0.4rem', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{ins.title}</p>
-                  <p style={{ fontSize: '0.825rem', color: 'var(--text-secondary)', lineHeight: 1.55 }}>{ins.body}</p>
+                <div key={`insight-${i}`} className="glass-card" style={{ padding: '1.5rem', borderLeft: '4px solid var(--accent-primary)' }}>
+                  <p className="premium-kicker" style={{ fontSize: '0.7rem', color: 'var(--accent-primary)', marginBottom: '0.5rem' }}>{ins.title}</p>
+                  <p style={{ fontSize: '0.95rem', color: 'var(--text-secondary)', lineHeight: 1.6, fontWeight: 450 }}>{ins.body}</p>
                 </div>
               ))}
             </div>
           ) : (
-            <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem', padding: '1rem 0' }}>Log more days to unlock AI insights.</p>
+            <p className="premium-muted" style={{ textAlign: 'center', padding: '2rem 0' }}>Establish a 3-day baseline to unlock deep insights.</p>
           )}
         </div>
 
-        {/* ── Bottom Row: Chart + Heatmap ───────────────────────── */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.4fr) minmax(0, 0.6fr)', gap: '1rem', alignItems: 'start' }}>
-
-          {/* Trend chart */}
-          <div style={{
-            background: 'var(--panel-bg)',
-            border: '1px solid var(--panel-border)',
-            borderRadius: '20px',
-            padding: '1.75rem',
-            boxShadow: 'var(--card-shadow)',
-          }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.2fr) minmax(0, 0.8fr)', gap: '2rem', alignItems: 'start', marginBottom: '2rem' }}>
+          <div className="premium-section">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                <div style={{ width: '32px', height: '32px', background: 'var(--accent-subtle)', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <Activity size={16} color="var(--accent-primary)" />
+              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                <div style={{ width: '40px', height: '40px', background: 'var(--accent-subtle)', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Target size={20} color="var(--accent-primary)" />
                 </div>
                 <div>
-                  <h2 style={{ fontSize: '1rem', fontWeight: 800, color: 'var(--text-primary)', lineHeight: 1 }}>Volume Trend</h2>
-                  <p style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '0.15rem' }}>Performance score over 7 days</p>
+                  <h2 className="premium-section-title" style={{ fontSize: '1.125rem' }}>Next Up</h2>
+                  <p className="premium-muted">Your top 3 focus tasks.</p>
+                </div>
+              </div>
+              <button className="btn btn-outline" style={{ padding: '0.4rem 0.8rem', fontSize: '0.75rem', borderRadius: '8px' }} onClick={() => navigate('/tasks')}>View All</button>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+              {dashboardTasks.length > 0 ? (
+                dashboardTasks.map(task => (
+                  <div key={task.id} 
+                    onClick={() => handleToggleTask(task.id)}
+                    className="premium-card-hover"
+                    style={{ 
+                      display: 'flex', alignItems: 'center', gap: '1rem', padding: '1rem', 
+                      background: task.is_completed ? 'rgba(16, 185, 129, 0.05)' : 'var(--bg-color)', 
+                      borderRadius: '12px', border: '1px solid var(--panel-border)',
+                      cursor: 'pointer', transition: 'all 0.2s'
+                    }}
+                  >
+                    <div style={{ 
+                      width: '20px', height: '20px', borderRadius: '6px', 
+                      border: `2px solid ${task.is_completed ? 'var(--success)' : 'var(--panel-border)'}`,
+                      background: task.is_completed ? 'var(--success)' : 'transparent',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff'
+                    }}>
+                      {task.is_completed && <CheckCircle2 size={14} />}
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <p style={{ 
+                        fontSize: '0.9rem', fontWeight: 600, 
+                        color: task.is_completed ? 'var(--text-muted)' : 'var(--text-primary)',
+                        textDecoration: task.is_completed ? 'line-through' : 'none'
+                      }}>
+                        {task.title}
+                      </p>
+                      <span className={`badge badge-${task.task_type === 'primary' ? 'purple' : task.task_type === 'support' ? 'blue' : 'gray'}`} style={{ fontSize: '0.6rem', marginTop: '0.25rem' }}>
+                        {task.task_type}
+                      </span>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div style={{ textAlign: 'center', padding: '2.5rem 1rem', border: '1px dashed var(--panel-border)', borderRadius: '16px', background: 'rgba(99, 102, 241, 0.02)' }}>
+                  <div style={{ width: '48px', height: '48px', background: 'var(--success-subtle)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1rem', color: 'var(--success)' }}>
+                    <CheckCircle2 size={24} />
+                  </div>
+                  <p style={{ fontWeight: 700, color: 'var(--text-primary)', marginBottom: '0.25rem' }}>
+                    {todayTasks.length > 0 ? 'Queue Clear!' : 'No tasks planned'}
+                  </p>
+                  <p className="premium-muted" style={{ fontSize: '0.8rem' }}>
+                    {todayTasks.length > 0 ? 'You have finished all your planned tasks for today.' : 'Start your day by planning your key tasks.'}
+                  </p>
+                  <button className="btn btn-primary" style={{ marginTop: '1.25rem', padding: '0.5rem 1.5rem', fontSize: '0.8rem' }} onClick={() => navigate('/tasks')}>
+                    {todayTasks.length > 0 ? 'View All Tasks' : 'Plan Today'}
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="premium-section" style={{ height: '100%' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.5rem' }}>
+              <div style={{ width: '40px', height: '40px', background: 'rgba(245, 158, 11, 0.1)', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Flame size={20} color="#f59e0b" />
+              </div>
+              <div>
+                <h2 className="premium-section-title" style={{ fontSize: '1.125rem' }}>Weekly Momentum</h2>
+                <p className="premium-muted">Your progress over 7 days.</p>
+              </div>
+            </div>
+            
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+              <div style={{ padding: '1.25rem', background: 'var(--bg-color)', borderRadius: '16px', border: '1px solid var(--panel-border)' }}>
+                <p style={{ fontSize: '0.7rem', fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '0.5rem' }}>Success Rate</p>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.5rem' }}>
+                  <span style={{ fontSize: '1.75rem', fontWeight: 900, color: 'var(--text-primary)' }}>
+                    {days.length > 0 ? Math.round((days.filter(d => d.performance_score >= 70).length / Math.min(days.length, 7)) * 100) : 0}%
+                  </span>
+                  <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>of targets hit</span>
+                </div>
+              </div>
+
+              <div style={{ padding: '1.25rem', background: 'var(--bg-color)', borderRadius: '16px', border: '1px solid var(--panel-border)' }}>
+                <p style={{ fontSize: '0.7rem', fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '0.5rem' }}>Avg Performance</p>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.5rem' }}>
+                  <span style={{ fontSize: '1.75rem', fontWeight: 900, color: 'var(--accent-primary)' }}>{weekAvg ?? 0}</span>
+                  <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>points / 100</span>
+                </div>
+              </div>
+
+              <button className="btn btn-outline" style={{ width: '100%', marginTop: '0.5rem' }} onClick={() => navigate('/weekly')}>
+                View Full Review <ArrowRight size={16} />
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.3fr) minmax(0, 0.7fr)', gap: '2rem', alignItems: 'start' }}>
+          <div className="premium-section">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                <div style={{ width: '40px', height: '40px', background: 'var(--accent-subtle)', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Activity size={20} color="var(--accent-primary)" />
+                </div>
+                <div>
+                  <h2 className="premium-section-title" style={{ fontSize: '1.125rem' }}>Score History</h2>
+                  <p className="premium-muted">Your daily performance scores.</p>
                 </div>
               </div>
               {weekAvg != null && (
                 <div style={{ textAlign: 'right' }}>
-                  <p style={{ fontSize: '0.6rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '0.1rem' }}>Week avg</p>
-                  <p style={{ fontFamily: "'Sora', sans-serif", fontSize: '1.5rem', fontWeight: 800, color: 'var(--accent-primary)', lineHeight: 1 }}>{weekAvg}</p>
+                  <p className="premium-mini-title" style={{ fontSize: '0.65rem' }}>Weekly Avg</p>
+                  <p style={{ fontSize: '1.75rem', fontWeight: 900, color: 'var(--accent-primary)' }}>{weekAvg}</p>
                 </div>
               )}
             </div>
-            {trendChartData.length > 0 ? (
-              <div style={{ height: 180 }}>
+            <div style={{ height: 220, marginTop: '1rem', minWidth: 0 }}>
+              {trendChartData.length > 0 ? (
                 <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={trendChartData} margin={{ top: 4, right: 4, left: -24, bottom: 0 }}>
+                  <AreaChart data={trendChartData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
                     <defs>
                       <linearGradient id="scoreGrad" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#6d3ef7" stopOpacity={0.3} />
-                        <stop offset="100%" stopColor="#6d3ef7" stopOpacity={0} />
+                        <stop offset="5%" stopColor="var(--accent-primary)" stopOpacity={0.3}/>
+                        <stop offset="95%" stopColor="var(--accent-primary)" stopOpacity={0}/>
                       </linearGradient>
                     </defs>
                     <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="var(--panel-border)" />
-                    <XAxis dataKey="log_date" tick={{ fill: 'var(--text-muted)', fontSize: 10, fontWeight: 600 }} tickLine={false} axisLine={false} tickFormatter={v => new Date(v).toLocaleDateString('en', { weekday: 'short' })} />
+                    <XAxis dataKey="log_date" tick={{ fill: 'var(--text-muted)', fontSize: 11, fontWeight: 600 }} tickLine={false} axisLine={false} tickFormatter={v => new Date(v).toLocaleDateString('en', { weekday: 'short' })} />
                     <YAxis domain={[0, 100]} hide />
-                    <Tooltip contentStyle={{ background: 'var(--panel-bg)', border: '1px solid var(--panel-border)', borderRadius: '10px', fontSize: '0.75rem', boxShadow: 'var(--card-shadow)' }} formatter={v => [`${v}`, 'Score']} />
-                    <Area type="monotone" dataKey="performance_score" stroke="#6d3ef7" strokeWidth={2.5} fill="url(#scoreGrad)" dot={{ fill: '#6d3ef7', r: 3, strokeWidth: 0 }} activeDot={{ r: 5, fill: '#6d3ef7' }} />
+                    <Tooltip 
+                      contentStyle={{ background: 'var(--panel-bg)', border: '1px solid var(--panel-border)', borderRadius: '12px', fontSize: '0.85rem', boxShadow: 'var(--card-shadow)', fontWeight: 700 }}
+                      itemStyle={{ color: 'var(--accent-primary)' }}
+                    />
+                    <Area type="monotone" dataKey="performance_score" stroke="var(--accent-primary)" strokeWidth={3} fill="url(#scoreGrad)" dot={{ fill: 'var(--accent-primary)', r: 4, strokeWidth: 0 }} activeDot={{ r: 6, fill: 'var(--accent-primary)', stroke: '#fff', strokeWidth: 2 }} />
                   </AreaChart>
                 </ResponsiveContainer>
-              </div>
-            ) : (
-              <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem', textAlign: 'center', padding: '3.5rem 0' }}>Log more days to see your trend.</p>
-            )}
+              ) : (
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text-muted)' }}>
+                  Awaiting performance data...
+                </div>
+              )}
+            </div>
           </div>
 
-          {/* Heatmap */}
-          <div style={{
-            background: 'var(--panel-bg)',
-            border: '1px solid var(--panel-border)',
-            borderRadius: '20px',
-            padding: '1.75rem',
-            boxShadow: 'var(--card-shadow)',
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                <div style={{ width: '32px', height: '32px', background: '#ede8ff', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <Calendar size={16} color="#6d3ef7" />
+          <div className="premium-section">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                <div style={{ width: '40px', height: '40px', background: 'rgba(99, 102, 241, 0.1)', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Calendar size={20} color="var(--accent-primary)" />
                 </div>
-                <h2 style={{ fontSize: '1rem', fontWeight: 800, color: 'var(--text-primary)' }}>Habit Density</h2>
+                <h2 className="premium-section-title" style={{ fontSize: '1.125rem' }}>Activity Map</h2>
               </div>
-              <button className="btn btn-outline" style={{ fontSize: '0.7rem', padding: '0.3rem 0.7rem', borderRadius: '8px' }} onClick={() => navigate('/history')}>
-                History
-              </button>
+              <button className="btn btn-outline" style={{ padding: '0.4rem 0.8rem', fontSize: '0.75rem', borderRadius: '8px' }} onClick={() => navigate('/history')}>History</button>
             </div>
-            <div style={{ overflowX: 'auto' }}>
+            <div style={{ marginTop: '1rem' }}>
               <Heatmap logs={heatmapLogs} />
             </div>
           </div>

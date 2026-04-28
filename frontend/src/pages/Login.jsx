@@ -40,49 +40,55 @@ function Login() {
   };
 
   return (
-    <div className="page-center" style={{ background: '#f8fafc', color: '#1e293b' }}>
-      <div style={{ width: '100%', maxWidth: '400px', padding: '2rem' }}>
+    <div className="page-center" style={{ position: 'relative', overflow: 'hidden' }}>
+      {/* Background Blobs */}
+      <div className="blob-container">
+        <div className="blob blob-1" />
+        <div className="blob blob-2" />
+        <div className="blob blob-3" />
+      </div>
+
+      <div className="glass-card" style={{ width: '100%', maxWidth: '420px', padding: '3rem 2.5rem', position: 'relative', zIndex: 1 }}>
         <div style={{ textAlign: 'center', marginBottom: '2.5rem' }}>
           <div style={{ 
-            width: '48px', height: '48px', background: '#4f46e5', borderRadius: '12px', 
+            width: '60px', height: '60px', background: 'var(--header-gradient)', borderRadius: '18px', 
             display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1.5rem',
-            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)'
+            boxShadow: '0 8px 20px rgba(99, 102, 241, 0.3)'
           }}>
-            <Target size={28} color="#fff" />
+            <Target size={32} color="#fff" />
           </div>
-          <h1 style={{ fontSize: '1.875rem', fontWeight: 800, color: '#0f172a', letterSpacing: '-0.025em' }}>Welcome back</h1>
-          <p style={{ color: '#64748b', marginTop: '0.5rem' }}>Login to continue your growth journey</p>
+          <h1 className="premium-title" style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>Welcome Back</h1>
+          <p className="premium-subtitle">Continue your high-performance journey.</p>
         </div>
 
         {error && (
-          <div style={{ 
-            padding: '0.75rem 1rem', background: '#fef2f2', border: '1px solid #fee2e2', 
-            borderRadius: '8px', color: '#b91c1c', fontSize: '0.875rem', marginBottom: '1.5rem' 
+          <div className="fade-in" style={{ 
+            padding: '1rem', background: 'rgba(244, 63, 94, 0.1)', border: '1px solid rgba(244, 63, 94, 0.2)', 
+            borderRadius: '12px', color: 'var(--danger)', fontSize: '0.875rem', marginBottom: '1.5rem',
+            fontWeight: 600, textAlign: 'center'
           }}>
             {error}
           </div>
         )}
 
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-          <div className="form-group" style={{ marginBottom: 0 }}>
-            <label style={{ color: '#475569', fontSize: '0.875rem', fontWeight: 600 }}>Email address</label>
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+          <div className="form-group">
+            <label>Email Address</label>
             <input
               type="email"
               className="form-control"
-              style={{ background: '#fff', border: '1px solid #e2e8f0', color: '#1e293b', marginTop: '0.5rem' }}
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              placeholder="you@example.com"
+              placeholder="operator@growthpath.ai"
             />
           </div>
 
-          <div className="form-group" style={{ marginBottom: 0 }}>
-            <label style={{ color: '#475569', fontSize: '0.875rem', fontWeight: 600 }}>Password</label>
+          <div className="form-group">
+            <label>Password</label>
             <input
               type="password"
               className="form-control"
-              style={{ background: '#fff', border: '1px solid #e2e8f0', color: '#1e293b', marginTop: '0.5rem' }}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
@@ -92,20 +98,17 @@ function Login() {
 
           <button 
             type="submit" 
-            className="btn-primary" 
+            className="btn btn-primary" 
             disabled={loading}
-            style={{ 
-              background: '#4f46e5', border: 'none', borderRadius: '8px', fontWeight: 600, 
-              padding: '0.75rem', width: '100%', marginTop: '0.5rem', boxShadow: 'none'
-            }}
+            style={{ width: '100%', justifyContent: 'center', padding: '1rem' }}
           >
-            {loading ? 'Logging in...' : 'Sign in'}
+            {loading ? 'Authenticating...' : 'Sign In'}
           </button>
         </form>
 
-        <p style={{ textAlign: 'center', marginTop: '1.5rem', fontSize: '0.875rem', color: '#64748b' }}>
-          Don't have an account? {' '}
-          <Link to="/register" style={{ color: '#4f46e5', fontWeight: 600, textDecoration: 'none' }}>Sign up</Link>
+        <p style={{ textAlign: 'center', marginTop: '2rem', fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
+          New to the lab? {' '}
+          <Link to="/register" style={{ color: 'var(--accent-primary)', fontWeight: 700, textDecoration: 'none' }}>Initialize Account</Link>
         </p>
       </div>
     </div>

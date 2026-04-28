@@ -1,4 +1,5 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
+import { API_BASE, authHeaders } from '../api/base';
 
 const AuthContext = createContext(null);
 
@@ -13,6 +14,17 @@ export const AuthProvider = ({ children }) => {
     if (storedToken && storedUser) {
       setToken(storedToken);
       setUser(JSON.parse(storedUser));
+      
+      // Sync with server
+      fetch(`${API_BASE}/me`, { headers: authHeaders(storedToken) })
+        .then(res => res.json())
+        .then(data => {
+          if (data.user) {
+            setUser(data.user);
+            localStorage.setItem('growthpath_user', JSON.stringify(data.user));
+          }
+        })
+        .catch(e => console.error("Profile sync failed", e));
     }
     setLoading(false);
   }, []);
@@ -32,8 +44,16 @@ export const AuthProvider = ({ children }) => {
     setUser(null);
   };
 
+  const updateUser = (newData) => {
+    setUser(prev => {
+      const updated = { ...prev, ...newData };
+      localStorage.setItem('growthpath_user', JSON.stringify(updated));
+      return updated;
+    });
+  };
+
   return (
-    <AuthContext.Provider value={{ token, user, login, logout, loading }}>
+    <AuthContext.Provider value={{ token, user, login, logout, loading, updateUser }}>
       {!loading && children}
     </AuthContext.Provider>
   );
