@@ -5,8 +5,25 @@ import hashlib
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
-from backend.config import Config
+from flask import current_app
+try:
+    from backend.config import Config
+except ImportError:
+    Config = None
+
 from ..database import query_one, execute
+
+
+def _get_config_val(key: str, default: Any = None) -> Any:
+    # Try current_app first, then static Config class
+    try:
+        if current_app:
+            return current_app.config.get(key, default)
+    except Exception:
+        pass
+    if Config:
+        return getattr(Config, key, default)
+    return default
 
 
 def build_insights_prompt(*, goal_title: str, trends: Dict[str, Any], recent_days: List[Dict[str, Any]]) -> str:
@@ -21,31 +38,116 @@ def build_insights_prompt(*, goal_title: str, trends: Dict[str, Any], recent_day
     )
 
 
-def _fallback() -> List[Dict[str, Any]]:
-    return [
-        {"title": "Not enough signal yet", "body": "Log a few more days to unlock sharper correlations.", "type": "info"},
-        {"title": "Keep inputs consistent", "body": "Use the same focus and friction scales daily to improve trend accuracy.", "type": "info"},
-        {"title": "Review one variable", "body": "Pick one support variable to adjust for 3 days and observe score changes.", "type": "positive"},
-    ]
+def _deterministic_insights(trends: Dict[str, Any], recent_days: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    Provides meaningful insights based on raw trends when AI is unavailable.
+    """
+    insights = []
+    
+    # 1. Trend Analysis
+    trend = trends.get("trend", "stable")
+    if trend == "up":
+        insights.append({
+            "title": "Positive Momentum", 
+            "body": "Your performance score is trending upwards. Whatever routine you're in, it's working.", 
+            "type": "positive"
+        })
+    elif trend == "down":
+        insights.append({
+            "title": "Efficiency Dip", 
+            "body": "Your scores are trending lower. Review recent logs for increased friction or low energy.", 
+            "type": "warning"
+        })
+    else:
+        insights.append({
+            "title": "Steady State", 
+            "body": "Consistency is good. To push further, try increasing focus on your primary task.", 
+            "type": "info"
+        })
+
+    # 2. Focus Correlation
+    if recent_days:
+        avg_focus = sum(float(d.get("focus_level") or 0) for d in recent_days) / len(recent_days)
+        if avg_focus >= 4.0:
+            insights.append({
+                "title": "High Density Focus", 
+                "body": "Your focus levels are exceptional. This deep work is a major performance driver.", 
+                "type": "positive"
+            })
+        elif avg_focus <= 2.5:
+            insights.append({
+                "title": "Focus Volatility", 
+                "body": "Lower focus levels detected recently. Check your environment for distractions.", 
+                "type": "warning"
+            })
+
+    # 3. Energy Resilience
+    if recent_days:
+        energies = [d.get("energy_state") for d in recent_days if d.get("energy_state")]
+        low_count = energies.count("Low")
+        if low_count >= 3:
+            insights.append({
+                "title": "Recovery Alert", 
+                "body": "Multiple low energy days detected. Prioritize recovery and sleep to avoid burnout.", 
+                "type": "warning"
+            })
+        elif "High" in energies:
+            insights.append({
+                "title": "Peak Energy Utilization", 
+                "body": "You are making the most of your high energy windows. Keep tracking these spikes.", 
+                "type": "positive"
+            })
+
+    # Final Fallback if still empty
+    if len(insights) < 3:
+        insights.append({"title": "Log Integrity", "body": "Continue consistent logging to uncover more subtle performance patterns.", "type": "info"})
+    
+    return insights[:3]
 
 
 def get_ai_insights(*, goal_title: str, trends: Dict[str, Any], recent_days: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """
-    AI provider integration is intentionally isolated here.
-    If no provider configured, returns safe deterministic fallback.
+    Returns AI insights using Groq if available, otherwise deterministic fallback.
     """
-    provider = (getattr(Config, "AI_PROVIDER", None) or "none").lower()
-    prompt = build_insights_prompt(goal_title=goal_title, trends=trends, recent_days=recent_days)
+    api_key = _get_config_val("GROQ_API_KEY")
+    deterministic = _deterministic_insights(trends, recent_days)
 
-    if provider == "none":
-        return _fallback()
+    if not api_key:
+        return deterministic
 
-    # Provider stubs (implement later without touching routes/analytics).
-    # The contract: return list[dict] with title/body/type.
     try:
-        raise RuntimeError("AI provider not implemented")
-    except Exception:
-        return _fallback()
+        from groq import Groq
+        client = Groq(api_key=api_key)
+        
+        prompt = build_insights_prompt(goal_title=goal_title, trends=trends, recent_days=recent_days)
+        
+        resp = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            temperature=0.3,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        
+        raw = (resp.choices[0].message.content or "").strip()
+        if "```" in raw:
+            raw = raw.split("```")[1]
+            if raw.startswith("json"):
+                raw = raw[4:]
+        
+        parsed = json.loads(raw)
+        if isinstance(parsed, list) and len(parsed) >= 2:
+            # Successfully got AI insights
+            return [
+                {
+                    "title": str(p.get("title", "Insight")), 
+                    "body": str(p.get("body", "")), 
+                    "type": str(p.get("type", "info")).lower()
+                } for p in parsed[:3]
+            ]
+        
+        return deterministic
+    except Exception as e:
+        print(f"AI Insights Error: {e}")
+        return deterministic
 
 
 def _context_hash(context: Dict[str, Any]) -> str:
@@ -113,9 +215,9 @@ def _deterministic_weekly_retro(context: Dict[str, Any]) -> str:
     weekday_stats = context.get("weekday_stats", {}) or {}
     best = weekday_stats.get("best_weekday")
     worst = weekday_stats.get("worst_weekday")
-    if best and worst:
-        return f"You were strongest on {best} and weaker on {worst}. Replicate your {best} routine earlier in the week."
-    return "Not enough weekly data yet. Continue logging daily to unlock a stronger weekly review."
+    if best:
+        return f"Your peak performance consistently occurs on {best}. Try to schedule your most demanding 'Primary' tasks for this day next week."
+    return "Weekly patterns are emerging. Continue logging to see which day of the week is your strongest performance window."
 
 
 def _build_ai_brief_prompt(context: Dict[str, Any]) -> str:
@@ -133,7 +235,7 @@ def _build_ai_brief_prompt(context: Dict[str, Any]) -> str:
 
 
 def _call_groq(prompt: str) -> Optional[Dict[str, Any]]:
-    api_key = getattr(Config, "GROQ_API_KEY", None)
+    api_key = _get_config_val("GROQ_API_KEY")
     if not api_key:
         return None
     try:
@@ -160,6 +262,58 @@ def _call_groq(prompt: str) -> Optional[Dict[str, Any]]:
         }
     except Exception:
         return None
+
+
+def _deterministic_tasks(goal_title: str) -> List[str]:
+    return [
+        f"Deep focus session on {goal_title}",
+        f"Review documentation/resources for {goal_title}",
+        "Identify and remove one friction point",
+        "Log secondary support variables",
+        "Daily calibration check"
+    ]
+
+
+def _build_task_prompt(goal_title: str, deadline_days: int) -> str:
+    return (
+        "You are a strategic performance planner.\n"
+        f"Goal: {goal_title}\n"
+        f"Timeline: {deadline_days} days total.\n"
+        "Generate a list of 4-5 high-impact daily tasks for today that move the needle on this goal.\n"
+        "Focus on actionable, measurable steps suitable for the current stage of the goal.\n"
+        "Return ONLY valid JSON: an array of strings. No commentary.\n"
+        "Example: [\"Complete 20m high-intensity sprint\", \"Review technical specs\", \"Update progress log\"]"
+    )
+
+
+def generate_ai_tasks(*, goal_title: str, deadline_days: int) -> List[str]:
+    """
+    Generates actionable daily tasks for a specific goal.
+    """
+    api_key = _get_config_val("GROQ_API_KEY")
+    if not api_key:
+        return _deterministic_tasks(goal_title)
+
+    try:
+        from groq import Groq
+        client = Groq(api_key=api_key)
+        resp = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            temperature=0.4,
+            messages=[{"role": "user", "content": _build_task_prompt(goal_title, deadline_days)}],
+        )
+        raw = (resp.choices[0].message.content or "").strip()
+        if "```" in raw:
+            raw = raw.split("```")[1]
+            if raw.startswith("json"):
+                raw = raw[4:]
+        parsed = json.loads(raw)
+        if isinstance(parsed, list):
+            return [str(t).strip() for t in parsed[:6]]
+        return _deterministic_tasks(goal_title)
+    except Exception as e:
+        print(f"AI Task Gen Error: {e}")
+        return _deterministic_tasks(goal_title)
 
 
 def get_ai_brief(*, user_id: int, goal_id: int, context: Dict[str, Any]) -> Dict[str, Any]:

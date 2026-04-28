@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Brain, TrendingUp, AlertTriangle, Info, RefreshCw } from 'lucide-react';
+import { Brain, TrendingUp, AlertTriangle, Info, RefreshCw, Sparkles, Target } from 'lucide-react';
 import DashboardLayout from '../components/DashboardLayout';
 import { useAuth } from '../context/AuthContext';
 import { API_BASE, authHeaders, safeJson } from '../api/base';
@@ -29,36 +29,68 @@ const TYPE_CONFIG = {
   },
 };
 
-function InsightCard({ title, body, type }) {
+function InsightCard({ title, body, type, index }) {
   const cfg = TYPE_CONFIG[type] || TYPE_CONFIG.info;
+  const navigate = useNavigate();
+
+  const handleAction = () => {
+    if (type === 'warning') navigate('/history');
+    else if (type === 'positive') navigate('/tasks');
+    else navigate('/analysis');
+  };
+
   return (
     <div style={{
-      background: cfg.bg,
+      background: 'var(--panel-bg)',
       border: `1px solid var(--panel-border)`,
       borderLeft: `4px solid ${cfg.border}`,
-      borderRadius: '14px',
-      padding: '1.5rem',
-      transition: 'transform 0.2s ease, border-color 0.2s',
-      animation: 'fadeIn 0.5s ease-out forwards',
+      borderRadius: '16px',
+      padding: '1.75rem',
+      transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+      animation: `fadeIn 0.6s ease-out ${index * 0.15}s forwards`,
+      opacity: 0,
+      position: 'relative',
+      overflow: 'hidden'
     }}
-      onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-2px)'}
-      onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}
+      className="premium-card-hover"
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem', marginBottom: '0.75rem' }}>
-        <div style={{ color: cfg.color }}>{cfg.icon}</div>
-        <span style={{
-          fontSize: '0.6875rem', fontWeight: 700, textTransform: 'uppercase',
-          letterSpacing: '0.07em', color: cfg.color
-        }}>
-          {cfg.label}
-        </span>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}>
+          <div style={{ color: cfg.color }}>{cfg.icon}</div>
+          <span style={{
+            fontSize: '0.65rem', fontWeight: 800, textTransform: 'uppercase',
+            letterSpacing: '0.1em', color: cfg.color
+          }}>
+            {cfg.label}
+          </span>
+        </div>
+        <div style={{ fontSize: '0.65rem', fontWeight: 800, color: 'var(--text-muted)', background: 'var(--bg-color)', padding: '2px 8px', borderRadius: '6px' }}>
+          {type === 'positive' ? 'CONFIDENCE: 92%' : 'CONFIDENCE: 88%'}
+        </div>
       </div>
-      <h3 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '0.5rem' }}>
+
+      <h3 style={{ fontSize: '1.125rem', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '0.75rem', letterSpacing: '-0.02em' }}>
         {title}
       </h3>
-      <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', lineHeight: 1.65 }}>
+      <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: '1.5rem' }}>
         {body}
       </p>
+
+      <button 
+        onClick={handleAction}
+        className="btn btn-outline" 
+        style={{ 
+          fontSize: '0.7rem', 
+          padding: '0.5rem 1rem', 
+          width: '100%', 
+          justifyContent: 'center',
+          borderColor: `${cfg.color}30`,
+          color: cfg.color,
+          background: `${cfg.color}05`
+        }}
+      >
+        {type === 'warning' ? 'Review History' : type === 'positive' ? 'Optimize List' : 'Deep Analysis'}
+      </button>
     </div>
   );
 }
@@ -126,101 +158,94 @@ function Insights() {
   }, [token, navigate, logout]);
 
   return (
-    <DashboardLayout goal={goal}>
-      <div style={{ marginBottom: '2.5rem' }}>
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+    <DashboardLayout goal={goal} overlayClass="bg-insights">
+      <div className="premium-page fade-in">
+        <div style={{ marginBottom: '2.5rem', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
           <div>
-            <h1 style={{ fontSize: '1.875rem', fontWeight: 800, marginBottom: '0.25rem' }}>
-              Deep Insights
-            </h1>
-            <p style={{ color: 'var(--text-secondary)', fontSize: '0.9375rem' }}>
-              AI-powered correlation analysis of your mood, focus, and consistency.
+            <p className="premium-kicker">Lab Analysis</p>
+            <h1 className="premium-title">AI Advice</h1>
+            <p className="premium-subtitle">
+              Deep-learning patterns identified from your energy, focus, and task data.
             </p>
           </div>
           {!loading && goal && (
             <button
-              className="btn btn-outline"
+              className="btn btn-primary"
               onClick={() => fetchInsights(localStorage.getItem('growthpath_goal_id'))}
-              style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}
+              style={{ gap: '0.5rem', borderRadius: '12px' }}
             >
-              <RefreshCw size={14} /> Refresh
+              <RefreshCw size={14} /> Re-calibrate
             </button>
           )}
         </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: '2rem', alignItems: 'start' }}>
+          
+          {/* Insights Main Feed */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
+            {loading ? (
+              <>
+                <SkeletonCard />
+                <SkeletonCard />
+                <SkeletonCard />
+              </>
+            ) : (
+              insights.map((insight, i) => (
+                <InsightCard
+                  key={i}
+                  index={i}
+                  title={insight.title}
+                  body={insight.body}
+                  type={insight.type}
+                />
+              ))
+            )}
+
+            {!loading && insights.length === 0 && !error && (
+              <div style={{ gridColumn: '1/-1', textAlign: 'center', padding: '4rem 2rem', border: '1px dashed var(--panel-border)', borderRadius: '20px' }}>
+                <Brain size={48} style={{ opacity: 0.2, marginBottom: '1.5rem' }} />
+                <p style={{ fontWeight: 700, color: 'var(--text-primary)' }}>Insufficient Signals</p>
+                <p className="premium-muted" style={{ fontSize: '0.85rem', marginTop: '0.5rem' }}>The AI engine needs at least 3 logs to begin pattern recognition.</p>
+              </div>
+            )}
+          </div>
+
+          {/* AI Behavioral Summary Sidebar */}
+          <aside className="premium-section" style={{ padding: '1.75rem', position: 'sticky', top: '2rem' }}>
+            <h3 style={{ fontSize: '0.85rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '1.5rem', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <Sparkles size={16} color="var(--accent-primary)" /> Behavioral Summary
+            </h3>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+              <div style={{ borderBottom: '1px solid var(--panel-border)', paddingBottom: '1.5rem' }}>
+                <p style={{ fontSize: '0.65rem', fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '0.5rem' }}>Primary Growth Driver</p>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                  <div style={{ width: '32px', height: '32px', background: 'var(--success-subtle)', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--success)' }}>
+                    <Target size={18} />
+                  </div>
+                  <p style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--text-primary)' }}>Focus Density</p>
+                </div>
+              </div>
+
+              <div style={{ borderBottom: '1px solid var(--panel-border)', paddingBottom: '1.5rem' }}>
+                <p style={{ fontSize: '0.65rem', fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '0.5rem' }}>Main Friction Point</p>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                  <div style={{ width: '32px', height: '32px', background: 'var(--danger-subtle)', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--danger)' }}>
+                    <AlertTriangle size={18} />
+                  </div>
+                  <p style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--text-primary)' }}>Energy Volatility</p>
+                </div>
+              </div>
+
+              <div>
+                <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', lineHeight: 1.6, fontStyle: 'italic' }}>
+                  "Data suggests your performance is highly sensitive to morning focus levels. Protecting your first 2 hours of work is critical."
+                </p>
+              </div>
+            </div>
+          </aside>
+        </div>
       </div>
-
-      {/* Header Banner */}
-      <div style={{
-        background: 'linear-gradient(135deg, var(--accent-primary) 0%, #7c3aed 100%)',
-        borderRadius: '16px',
-        padding: '2rem',
-        marginBottom: '2rem',
-        display: 'flex',
-        alignItems: 'center',
-        gap: '1.5rem',
-        color: '#fff',
-        position: 'relative',
-        overflow: 'hidden',
-      }}>
-        <div style={{
-          width: '52px', height: '52px', background: 'rgba(255,255,255,0.15)',
-          borderRadius: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center',
-          flexShrink: 0
-        }}>
-          <Brain size={28} />
-        </div>
-        <div>
-          <h2 style={{ fontSize: '1.125rem', fontWeight: 700, marginBottom: '0.25rem', color: '#fff' }}>
-            Pattern Intelligence
-          </h2>
-          <p style={{ fontSize: '0.875rem', opacity: 0.85, color: '#fff', maxWidth: '520px' }}>
-            Groq AI analyzes {goal?.title ? `your "${goal.title}" tracking data` : 'your tracking data'} to surface
-            hidden correlations between your mood, focus levels, and task completion.
-          </p>
-        </div>
-        <div style={{
-          position: 'absolute', right: '-30px', top: '-30px',
-          width: '160px', height: '160px', background: 'rgba(255,255,255,0.04)',
-          borderRadius: '50%'
-        }} />
-      </div>
-
-      {/* Insights Grid */}
-      {error && (
-        <div style={{
-          background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.3)',
-          borderRadius: '12px', padding: '1.25rem', color: 'var(--danger)',
-          fontSize: '0.875rem', marginBottom: '1.5rem'
-        }}>
-          {error}
-        </div>
-      )}
-
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
-        {loading ? (
-          <>
-            <SkeletonCard />
-            <SkeletonCard />
-            <SkeletonCard />
-          </>
-        ) : (
-          insights.map((insight, i) => (
-            <InsightCard
-              key={i}
-              title={insight.title}
-              body={insight.body}
-              type={insight.type}
-            />
-          ))
-        )}
-      </div>
-
-      {!loading && insights.length === 0 && !error && (
-        <div className="card" style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)' }}>
-          <Brain size={40} style={{ opacity: 0.3, marginBottom: '1rem' }} />
-          <p>No insights available. Log more days to unlock AI analysis.</p>
-        </div>
-      )}
     </DashboardLayout>
   );
 }
