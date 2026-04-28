@@ -69,117 +69,132 @@ function Setup() {
   const difficulties = ['Easy', 'Medium', 'Hard'];
 
   return (
-    <div className="setup-layout fade-in">
-      
-      <div className="setup-left">
-        <div style={{ maxWidth: '440px' }}>
-          <div style={{ 
-            width: '48px', height: '48px', background: 'var(--accent-primary)', borderRadius: '12px', 
-            display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '2rem'
-          }}>
-            <Target size={28} color="#fff" />
-          </div>
-          <h1 style={{ fontSize: '2.25rem', fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.03em', lineHeight: 1.1, marginBottom: '1.25rem' }}>
-            Initialize <br />New Experiment.
-          </h1>
-          <p style={{ color: 'var(--text-secondary)', fontSize: '1rem', lineHeight: 1.7, marginBottom: '2.5rem' }}>
-            Define the target variable, set a measurable timeline,
-            and generate a structured execution roadmap.
-          </p>
-          
-          <div style={{ 
-            padding: '1.25rem 1.5rem', background: 'var(--panel-bg)', border: '1px solid var(--panel-border)', borderRadius: '10px', 
-            boxShadow: 'var(--card-shadow)'
-          }}>
-            <p style={{ fontSize: '0.6rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '0.5rem' }}>System Note</p>
-            <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-              The AI roadmap will generate 3 structured milestones per day
-              calibrated to your commitment and difficulty inputs.
-            </p>
-          </div>
-        </div>
+    <div className="premium-page fade-in" style={{ minHeight: '100vh', padding: 0 }}>
+      {/* Background Blobs */}
+      <div className="blob-container">
+        <div className="blob blob-1" />
+        <div className="blob blob-2" />
+        <div className="blob blob-3" />
       </div>
 
-      <div className="setup-right">
-        <div style={{ width: '100%', maxWidth: '580px' }}>
-          <p style={{ fontSize: '0.625rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: '0.5rem' }}>Performance Lab</p>
-          <h2 style={{ fontSize: '1.375rem', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '2rem', letterSpacing: '-0.02em' }}>Define Experiment Parameters</h2>
-          
-          <form onSubmit={handleSubmit}>
-            <div className="form-group">
-              <label>Objective</label>
-              <input 
-                type="text" 
-                name="title" 
-                className="form-control" 
-                placeholder="e.g. Build a daily meditation habit for 60 days"
-                value={formData.title}
-                onChange={handleChange}
-                required 
-              />
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(400px, 1fr) 1.5fr', minHeight: '100vh' }}>
+        {/* Left Panel: Context */}
+        <div style={{ 
+          background: 'rgba(255, 255, 255, 0.03)', 
+          backdropFilter: 'blur(40px)', 
+          borderRight: '1px solid var(--panel-border)',
+          padding: '4rem',
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'center'
+        }}>
+          <div style={{ maxWidth: '440px' }}>
+            <div style={{ 
+              width: '64px', height: '64px', background: 'var(--header-gradient)', borderRadius: '20px', 
+              display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '2.5rem',
+              boxShadow: '0 8px 24px rgba(99, 102, 241, 0.3)'
+            }}>
+              <Target size={32} color="#fff" />
             </div>
+            <h1 className="premium-title" style={{ fontSize: '3rem', marginBottom: '1.5rem' }}>
+              Initialize <br />New Protocol.
+            </h1>
+            <p className="premium-subtitle" style={{ fontSize: '1.1rem', marginBottom: '3rem' }}>
+              Define your objective, calibrate your timeline, and let the AI architect your daily execution roadmap.
+            </p>
+            
+            <div className="glass-card" style={{ padding: '1.5rem' }}>
+              <p className="premium-kicker" style={{ fontSize: '0.7rem' }}>System Intelligence</p>
+              <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+                Your execution protocol will be dynamically adjusted based on the difficulty and commitment variables you provide.
+              </p>
+            </div>
+          </div>
+        </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
+        {/* Right Panel: Form */}
+        <div style={{ padding: '4rem', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}>
+          <div style={{ width: '100%', maxWidth: '540px' }}>
+            <p className="premium-kicker">Configuration</p>
+            <h2 style={{ fontSize: '1.75rem', fontWeight: 800, marginBottom: '2.5rem' }}>Define Experiment Parameters</h2>
+            
+            <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
               <div className="form-group">
-                <label>Duration (Days)</label>
+                <label>Primary Objective</label>
                 <input 
-                  type="number" 
-                  name="deadline" 
+                  type="text" 
+                  name="title" 
                   className="form-control" 
-                  min="1"
-                  placeholder="30"
-                  value={formData.deadline}
+                  placeholder="e.g. Master React Advanced Patterns"
+                  value={formData.title}
+                  onChange={handleChange}
+                  required 
+                />
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
+                <div className="form-group">
+                  <label>Timeline (Days)</label>
+                  <input 
+                    type="number" 
+                    name="deadline" 
+                    className="form-control" 
+                    min="1"
+                    placeholder="30"
+                    value={formData.deadline}
+                    onChange={handleChange}
+                    required 
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Difficulty Matrix</label>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.5rem' }}>
+                    {difficulties.map(diff => (
+                      <button 
+                        key={diff} 
+                        type="button"
+                        className={`btn ${formData.difficulty === diff ? 'btn-primary' : 'btn-outline'}`}
+                        onClick={() => setSelection('difficulty', diff)}
+                        style={{ padding: '0.625rem 0', fontSize: '0.75rem', justifyContent: 'center' }}
+                      >
+                        {diff}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label>Daily Allocation</label>
+                <input 
+                  type="text" 
+                  name="commitment" 
+                  className="form-control" 
+                  placeholder="e.g. 2 hours of deep focus"
+                  value={formData.commitment}
                   onChange={handleChange}
                   required 
                 />
               </div>
 
               <div className="form-group">
-                <label>Difficulty Variable</label>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.5rem' }}>
-                  {difficulties.map(diff => (
-                    <div 
-                      key={diff} 
-                      className={`selectable-item ${formData.difficulty === diff ? 'active' : ''}`}
-                      onClick={() => setSelection('difficulty', diff)}
-                      style={{ padding: '0.625rem 0' }}
-                    >
-                      {diff}
-                    </div>
-                  ))}
-                </div>
+                <label>Strategic Context <span style={{ fontWeight: 400, opacity: 0.5 }}>(optional)</span></label>
+                <textarea 
+                  name="motivation" 
+                  className="form-control" 
+                  placeholder="Provide context for the AI planner..."
+                  value={formData.motivation}
+                  onChange={handleChange}
+                  style={{ minHeight: '100px' }}
+                ></textarea>
               </div>
-            </div>
 
-            <div className="form-group">
-              <label>Daily Time Commitment</label>
-              <input 
-                type="text" 
-                name="commitment" 
-                className="form-control" 
-                placeholder="e.g. 30 mins, 1 hour of focused work"
-                value={formData.commitment}
-                onChange={handleChange}
-                required 
-              />
-            </div>
-
-            <div className="form-group">
-              <label>Baseline Context <span style={{ fontWeight: 400, color: 'var(--text-muted)', fontSize: '0.8rem' }}>(optional)</span></label>
-              <textarea 
-                name="motivation" 
-                className="form-control" 
-                placeholder="Why this objective? Any relevant context for the AI roadmap..."
-                value={formData.motivation}
-                onChange={handleChange}
-                style={{ minHeight: '80px' }}
-              ></textarea>
-            </div>
-
-            <button type="submit" disabled={loading} className="btn btn-primary" style={{ width: '100%', padding: '0.875rem' }}>
-              {loading ? 'Generating Roadmap...' : 'Initialize Experiment'} <ArrowRight size={18} style={{ marginLeft: '0.5rem' }} />
-            </button>
-          </form>
+              <button type="submit" disabled={loading} className="btn btn-primary" style={{ width: '100%', padding: '1rem', justifyContent: 'center' }}>
+                {loading ? 'Generating roadmap...' : 'Initialize Protocol'} <ArrowRight size={18} />
+              </button>
+            </form>
+          </div>
         </div>
       </div>
     </div>

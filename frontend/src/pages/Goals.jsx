@@ -42,31 +42,31 @@ function Goals() {
   const completedGoals = goals.filter(g => g.status === 'completed');
 
   if (loading) return (
-    <DashboardLayout goal={goals.find(g => g.id.toString() === activeGoalId)}>
+    <DashboardLayout goal={goals.find(g => g.id.toString() === activeGoalId)} overlayClass="bg-goals">
       <div className="premium-page" style={{ alignItems: 'center', justifyContent: 'center', minHeight: '60vh' }}>
         <Sparkles className="spin" size={40} color="var(--accent-primary)" />
-        <p className="premium-muted">Mapping telemetry paths...</p>
+        <p className="premium-muted">Loading your goals...</p>
       </div>
     </DashboardLayout>
   );
 
   return (
-    <DashboardLayout goal={goals.find(g => g.id.toString() === activeGoalId)}>
+    <DashboardLayout goal={goals.find(g => g.id.toString() === activeGoalId)} overlayClass="bg-goals">
       <div className="premium-page">
         <header className="premium-header" style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
-            <p className="premium-kicker">Navigation Hub</p>
-            <h1 className="premium-title">Mission Control</h1>
-            <p className="premium-subtitle">Switch between active experiments or define a new performance vector.</p>
+            <p className="premium-kicker">Goal Management</p>
+            <h1 className="premium-title">Manage Goals</h1>
+            <p className="premium-subtitle">Switch between your active goals or start a new one.</p>
           </div>
           <button className="btn btn-primary" onClick={() => navigate('/setup')}>
-            <Plus size={18} /> New Objective
+            <Plus size={18} /> New Goal
           </button>
         </header>
 
         <section className="premium-section">
           <h2 className="premium-section-title">
-            <Activity size={20} className="text-secondary" /> Active Vectors ({activeGoals.length})
+            <Activity size={20} className="text-secondary" /> Active Goals ({activeGoals.length})
           </h2>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '1rem', marginTop: '1.5rem' }}>
             {activeGoals.map(goal => {
@@ -126,7 +126,7 @@ function Goals() {
                       </button>
                     ) : (
                       <button className="btn btn-primary" style={{ padding: '0.5rem 1rem' }} onClick={() => navigate('/dashboard')}>
-                         View Intelligence <ArrowRight size={16} />
+                         View Dashboard <ArrowRight size={16} />
                       </button>
                     )}
                   </div>
@@ -134,7 +134,7 @@ function Goals() {
               );
             })}
             {activeGoals.length === 0 && !loading && (
-              <p className="premium-empty" style={{ textAlign: 'center', padding: '3rem' }}>No active telemetry paths detected. Map a new objective to begin.</p>
+              <p className="premium-empty" style={{ textAlign: 'center', padding: '3rem' }}>No active goals found. Create a new one to get started!</p>
             )}
           </div>
         </section>
@@ -142,7 +142,7 @@ function Goals() {
         {completedGoals.length > 0 && (
           <section className="premium-section">
             <h2 className="premium-section-title">
-              <Trophy size={20} className="text-secondary" /> Achievement Archives ({completedGoals.length})
+              <Trophy size={20} className="text-secondary" /> Completed Goals ({completedGoals.length})
             </h2>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '1rem', marginTop: '1.5rem' }}>
               {completedGoals.map(goal => (
@@ -169,12 +169,15 @@ function Goals() {
                     </div>
                     <div>
                       <h3 style={{ fontSize: '1rem', fontWeight: 800 }}>{goal.title}</h3>
-                      <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Success Vector Locked</p>
+                      <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Goal Completed</p>
                     </div>
                   </div>
                   <div style={{ borderTop: '1px solid var(--panel-border)', paddingTop: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Finished {new Date(goal.created_at).toLocaleDateString()}</span>
-                    <button className="btn btn-outline" style={{ padding: '0.35rem 0.75rem', fontSize: '0.75rem' }} onClick={() => switchGoal(goal.id)}>Analytics</button>
+                    <div>
+                      <p style={{ fontSize: '0.6rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '0.1rem' }}>Started</p>
+                      <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{new Date(goal.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                    </div>
+                    <button className="btn btn-outline" style={{ padding: '0.35rem 0.75rem', fontSize: '0.75rem' }} onClick={() => switchGoal(goal.id)}>View History</button>
                   </div>
                 </div>
               ))}

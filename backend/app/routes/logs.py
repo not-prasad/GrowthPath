@@ -90,8 +90,31 @@ def upsert_daily_log():
             (focus_level, energy_state, friction_count, mood, notes, hurdles, log_id, user_id, goal_id),
         )
 
+    # Trigger recalculation
+    recalculate_log_stats(user_id, goal_id, log_date)
+
+    log_row = query_one("SELECT * FROM daily_logs WHERE id = ?", (log_id,))
+    totals = query_one("SELECT total_xp, level FROM users WHERE id=?", (user_id,))
+    return jsonify({"log": log_row, "total_xp": totals["total_xp"], "level": totals["level"]}), 201
+
+
+def recalculate_log_stats(user_id: int, goal_id: int, log_date: str) -> None:
+    """
+    Recalculates performance_score and xp_gained for a specific day/goal/user.
+    Then updates the global user total_xp and level.
+    """
+    log = query_one(
+        "SELECT id, focus_level, friction_count FROM daily_logs WHERE user_id=? AND goal_id=? AND log_date=?",
+        (user_id, goal_id, log_date)
+    )
+    if not log:
+        return
+
+    log_id = int(log["id"])
+    focus_level = float(log.get("focus_level", 3.0) or 3.0)
+    friction_count = int(log.get("friction_count", 0) or 0)
+
     # Compute score from tasks completion for that date.
-    # Planned tasks are stored in daily_tasks; completion flags are per task.
     counts = query_one(
         """
         SELECT
@@ -108,9 +131,10 @@ def upsert_daily_log():
     ) or {}
 
     primary_done = int(counts.get("primary_done", 0) or 0) > 0
-    optimize_done = int(counts.get("optimize_done", 0) or 0) > 0
     support_total = int(counts.get("support_total", 0) or 0)
     support_done = int(counts.get("support_done", 0) or 0)
+    optimize_total = int(counts.get("optimize_total", 0) or 0)
+    optimize_done = int(counts.get("optimize_done", 0) or 0)
 
     score = compute_performance_score(
         ScoreInputs(
@@ -118,11 +142,12 @@ def upsert_daily_log():
             support_done=support_done,
             support_total=support_total,
             optimize_done=optimize_done,
+            optimize_total=optimize_total,
             focus_level=focus_level,
             friction_count=friction_count,
         )
     )
-    xp_gained = compute_xp(score, primary_done=primary_done)
+    xp_gained = compute_xp(primary_done=primary_done, support_done=support_done, optimize_done=optimize_done)
 
     execute(
         "UPDATE daily_logs SET performance_score=?, xp_gained=?, updated_at=datetime('now') WHERE id=?",
@@ -130,14 +155,10 @@ def upsert_daily_log():
     )
 
     # Update user xp/level idempotently for the day:
-    # store xp_gained on the log; user's total_xp should be sum(logs.xp_gained) to avoid double-add bugs.
     totals = query_one("SELECT COALESCE(SUM(xp_gained),0) AS total_xp FROM daily_logs WHERE user_id=?", (user_id,))
     total_xp = int(totals.get("total_xp", 0) or 0) if totals else 0
     level = compute_level(total_xp)
     execute("UPDATE users SET total_xp=?, level=?, updated_at=datetime('now') WHERE id=?", (total_xp, level, user_id))
-
-    log_row = query_one("SELECT * FROM daily_logs WHERE id = ?", (log_id,))
-    return jsonify({"log": log_row, "total_xp": total_xp, "level": level}), 201
 
 
 @bp.get("/logs")
@@ -217,6 +238,7 @@ def get_logs_grouped():
             {
                 "date": d,
                 "performance_score": float(l.get("performance_score", 0) or 0),
+                "xp_gained": int(l.get("xp_gained", 0) or 0),
                 "focus_level": float(l.get("focus_level", 0) or 0),
                 "energy_state": l.get("energy_state"),
                 "friction_count": int(l.get("friction_count", 0) or 0),

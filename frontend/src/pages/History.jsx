@@ -57,10 +57,10 @@ function History() {
   if (!goal || loading) return null;
 
   return (
-    <DashboardLayout goal={goal}>
+    <DashboardLayout goal={goal} overlayClass="bg-history">
       <div style={{ marginBottom: '2.5rem' }}>
-        <h1 style={{ fontSize: '1.875rem', fontWeight: 800, marginBottom: '0.25rem' }}>Log History</h1>
-        <p style={{ color: 'var(--text-secondary)', fontSize: '0.9375rem' }}>A complete archive of your daily reflections and progress logs.</p>
+        <h1 style={{ fontSize: '1.875rem', fontWeight: 800, marginBottom: '0.25rem' }}>Past Logs</h1>
+        <p style={{ color: 'var(--text-secondary)', fontSize: '0.9375rem' }}>A full record of your daily progress and notes.</p>
       </div>
 
       <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
@@ -73,14 +73,14 @@ function History() {
             }}>
               <FileText size={32} />
             </div>
-            <h3 style={{ fontSize: '1.125rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '0.5rem' }}>No entries found</h3>
+            <h3 style={{ fontSize: '1.125rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '0.5rem' }}>No logs yet</h3>
             <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', maxWidth: '300px', margin: '0 auto' }}>
-              Consistency is key. Head back to the check-in page to record your first day!
+              Start tracking your goals today to see your progress history here!
             </p>
             <button 
               className="btn btn-primary" 
               style={{ marginTop: '1.5rem' }}
-              onClick={() => navigate('/checkin')}
+              onClick={() => navigate('/log')}
             >
               Log Today's Progress
             </button>
@@ -96,10 +96,10 @@ function History() {
                         {new Date(day.date).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
                       </p>
                       <p style={{ marginTop: '0.35rem', fontSize: '0.875rem', fontWeight: 800, color: getPerformanceColor(day.performance_score || 0) }}>
-                        Score: {Math.round(day.performance_score || 0)} / 100
+                        Daily Score: {Math.round(day.performance_score || 0)} / 100
                       </p>
                       <p style={{ marginTop: '0.25rem', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-                        Energy: {day.energy_state || 'Stable'} · Focus: {day.focus_level || 0}/5 · Friction: {day.friction_count || 0}
+                        Energy Level: {day.energy_state || 'Stable'} · Focus: {day.focus_level || 0}/5 · Challenges: {day.friction_count || 0}
                       </p>
                     </div>
                     <div style={{ textAlign: 'right' }}>

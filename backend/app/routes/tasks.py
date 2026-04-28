@@ -7,10 +7,11 @@ from typing import Any, Dict, Optional
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import get_jwt_identity, jwt_required
 
-from ..database import execute, query_one
+from ..database import execute, query_one, query_all
 from ..utils.errors import ApiError
 from ..utils.validation import as_bool, as_date_yyyy_mm_dd, as_enum, as_str, require_json
-from .logs import _resolve_goal_id
+from .logs import _resolve_goal_id, recalculate_log_stats
+from ..services.ai_engine import generate_ai_tasks
 
 
 bp = Blueprint("tasks", __name__, url_prefix="/api")
@@ -77,8 +78,11 @@ def add_custom_task():
         ),
     )
 
+    recalculate_log_stats(user_id, goal_id, log_date)
+
     task = query_one("SELECT * FROM daily_tasks WHERE id = ?", (task_id,))
-    return jsonify({"task": task}), 201
+    totals = query_one("SELECT total_xp, level FROM users WHERE id=?", (user_id,))
+    return jsonify({"task": task, "total_xp": totals["total_xp"], "level": totals["level"]}), 201
 
 
 @bp.put("/tasks/<int:task_id>/toggle")
@@ -88,9 +92,12 @@ def toggle_task(task_id: int):
     Toggle completion status for a daily_task owned by the current user.
     """
     user_id = int(get_jwt_identity())
-    row = query_one("SELECT id, is_completed FROM daily_tasks WHERE id=? AND user_id=?", (task_id, user_id))
+    row = query_one("SELECT id, is_completed, goal_id, log_date FROM daily_tasks WHERE id=? AND user_id=?", (task_id, user_id))
     if not row:
         raise ApiError("not_found", "Task not found.", 404)
+
+    row_goal_id = int(row["goal_id"])
+    row_log_date = str(row["log_date"])
 
     is_completed = 0 if int(row.get("is_completed", 0) or 0) == 1 else 1
     completed_at = datetime.utcnow().isoformat() if is_completed == 1 else None
@@ -99,6 +106,79 @@ def toggle_task(task_id: int):
         "UPDATE daily_tasks SET is_completed=?, completed_at=?, updated_at=datetime('now') WHERE id=? AND user_id=?",
         (is_completed, completed_at, task_id, user_id),
     )
-    task = query_one("SELECT * FROM daily_tasks WHERE id = ?", (task_id,))
-    return jsonify({"task": task}), 200
+    recalculate_log_stats(user_id, row_goal_id, row_log_date)
 
+    task = query_one("SELECT * FROM daily_tasks WHERE id = ?", (task_id,))
+    totals = query_one("SELECT total_xp, level FROM users WHERE id=?", (user_id,))
+    return jsonify({"task": task, "total_xp": totals["total_xp"], "level": totals["level"]}), 200
+
+
+
+
+@bp.post("/tasks/generate")
+@jwt_required()
+def generate_tasks():
+    """
+    Triggers AI to generate 4-5 tasks for a goal+date.
+    """
+    user_id = int(get_jwt_identity())
+    data = require_json(request)
+
+    goal_id = _resolve_goal_id(user_id, str(data.get("goal_id")) if data.get("goal_id") is not None else None)
+    log_date = as_date_yyyy_mm_dd(data.get("log_date"), field="log_date")
+
+    goal = query_one("SELECT title, deadline_days FROM goals WHERE id=? AND user_id=?", (goal_id, user_id))
+    if not goal:
+        raise ApiError("not_found", "Goal not found.", 404)
+
+    # Generate tasks via AI
+    task_titles = generate_ai_tasks(
+        goal_title=goal["title"],
+        deadline_days=goal["deadline_days"]
+    )
+
+    log_id = _ensure_log(user_id, goal_id, log_date)
+    created_tasks = []
+
+    for title in task_titles:
+        key = _dedupe_key("optimize", title)
+        # Check if already exists to avoid duplicates on re-gen
+        existing = query_one("SELECT id FROM daily_tasks WHERE log_id=? AND dedupe_key=?", (log_id, key))
+        if existing:
+            continue
+
+        tid = execute(
+            """
+            INSERT INTO daily_tasks(user_id, goal_id, log_id, log_date, task_type, title, is_completed, dedupe_key)
+            VALUES (?,?,?,?,?,?,?,?)
+            """,
+            (user_id, goal_id, log_id, log_date, "optimize", title, 0, key)
+        )
+        created_tasks.append(tid)
+
+    # Return the full list of tasks for the day
+    tasks = query_all("SELECT * FROM daily_tasks WHERE log_id=? ORDER BY created_at ASC", (log_id,))
+    return jsonify({"tasks": tasks}), 200
+@bp.delete("/tasks/<int:task_id>")
+@jwt_required()
+def delete_task(task_id: int):
+    """
+    Delete a daily_task.
+    """
+    user_id = int(get_jwt_identity())
+    row = query_one("SELECT id, goal_id, log_date FROM daily_tasks WHERE id=? AND user_id=?", (task_id, user_id))
+    if not row:
+        raise ApiError("not_found", "Task not found.", 404)
+
+    row_goal_id = int(row["goal_id"])
+    row_log_date = str(row["log_date"])
+
+    execute("DELETE FROM daily_tasks WHERE id=? AND user_id=?", (task_id, user_id))
+    recalculate_log_stats(user_id, row_goal_id, row_log_date)
+
+    totals = query_one("SELECT total_xp, level FROM users WHERE id=?", (user_id,))
+    return jsonify({
+        "success": True, 
+        "total_xp": totals["total_xp"], 
+        "level": totals["level"]
+    }), 200

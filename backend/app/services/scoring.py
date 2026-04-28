@@ -12,7 +12,8 @@ class ScoreInputs:
     primary_done: bool
     support_done: int
     support_total: int
-    optimize_done: bool
+    optimize_done: int
+    optimize_total: int
     focus_level: float  # expected 0..5
     friction_count: int
 
@@ -25,13 +26,16 @@ def compute_performance_score(inp: ScoreInputs) -> float:
     # Normalize inputs
     support_total = max(int(inp.support_total or 0), 0)
     support_done = max(min(int(inp.support_done or 0), support_total), 0)
+    optimize_total = max(int(inp.optimize_total or 0), 0)
+    optimize_done = max(min(int(inp.optimize_done or 0), optimize_total), 0)
+    
     focus = _clamp(float(inp.focus_level if inp.focus_level is not None else 3.0), 0.0, 5.0)
     friction = max(int(inp.friction_count or 0), 0)
 
     # Weighted components (0..1 each)
     primary_score = 1.0 if bool(inp.primary_done) else 0.5  # forgiving baseline
-    support_score = (support_done / support_total) if support_total > 0 else 0.8  # forgiving if no support tasks exist
-    optimize_score = 1.0 if bool(inp.optimize_done) else 0.8
+    support_score = (0.8 + 0.2 * (support_done / support_total)) if support_total > 0 else 0.8
+    optimize_score = (0.8 + 0.2 * (optimize_done / optimize_total)) if optimize_total > 0 else 0.8
     focus_score = focus / 5.0
 
     weighted = (
@@ -50,18 +54,16 @@ def compute_performance_score(inp: ScoreInputs) -> float:
     return round(final_score, 2)
 
 
-def compute_xp(score: float, primary_done: bool) -> int:
+def compute_xp(primary_done: bool, support_done: int, optimize_done: int) -> int:
     """
-    Optional XP mapping. Deterministic integer.
+    Simplified per-task XP reward system.
     """
-    s = _clamp(float(score or 0.0), 0.0, 100.0)
+    xp = 0
     if primary_done:
-        return int(50 + (s / 100.0) * 50)  # 50..100
-    if s >= 50:
-        return int((s / 100.0) * 40)       # 20..40 at 50..100
-    if s > 0:
-        return 10
-    return 0
+        xp += 100
+    xp += (int(support_done or 0) * 70)
+    xp += (int(optimize_done or 0) * 50)
+    return xp
 
 
 def compute_level(total_xp: int) -> int:

@@ -5,17 +5,18 @@ import {
   Sparkles, Medal, Shield, Gauge, Activity, Target
 } from 'lucide-react';
 import DashboardLayout from '../components/DashboardLayout';
+import MilestonesBadge from '../components/MilestonesBadge';
 import { useAuth } from '../context/AuthContext';
 import { API_BASE, authHeaders, safeJson } from '../api/base';
 
 const TIERS = [
-  { level: 1,  title: 'Baseline',           color: '#94a3b8', gradient: 'linear-gradient(135deg, #64748b 0%, #94a3b8 100%)' },
-  { level: 2,  title: 'Consistent',          color: '#38bdf8', gradient: 'linear-gradient(135deg, #0ea5e9 0%, #38bdf8 100%)' },
-  { level: 3,  title: 'Calibrated',          color: '#34d399', gradient: 'linear-gradient(135deg, #10b981 0%, #34d399 100%)' },
-  { level: 4,  title: 'High-Output',         color: '#a855f7', gradient: 'linear-gradient(135deg, #8b5cf6 0%, #a855f7 100%)' },
-  { level: 5,  title: 'Peak Operator',       color: '#f59e0b', gradient: 'linear-gradient(135deg, #d97706 0%, #f59e0b 100%)' },
-  { level: 6,  title: 'Elite Performer',     color: '#ef4444', gradient: 'linear-gradient(135deg, #dc2626 0%, #ef4444 100%)' },
-  { level: 10, title: 'Master Analyst',      color: '#fbbf24', gradient: 'linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%)' },
+  { level: 1,  title: 'Beginner',           color: '#94a3b8', gradient: 'linear-gradient(135deg, #64748b 0%, #94a3b8 100%)' },
+  { level: 2,  title: 'Steady',             color: '#38bdf8', gradient: 'linear-gradient(135deg, #0ea5e9 0%, #38bdf8 100%)' },
+  { level: 3,  title: 'Experienced',        color: '#34d399', gradient: 'linear-gradient(135deg, #10b981 0%, #34d399 100%)' },
+  { level: 4,  title: 'High Achiever',      color: '#a855f7', gradient: 'linear-gradient(135deg, #8b5cf6 0%, #a855f7 100%)' },
+  { level: 5,  title: 'Top Performer',      color: '#f59e0b', gradient: 'linear-gradient(135deg, #d97706 0%, #f59e0b 100%)' },
+  { level: 6,  title: 'Elite',              color: '#ef4444', gradient: 'linear-gradient(135deg, #dc2626 0%, #ef4444 100%)' },
+  { level: 10, title: 'Master',             color: '#fbbf24', gradient: 'linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%)' },
 ];
 
 const getPerformanceColor = (score) => {
@@ -68,20 +69,34 @@ function Mastery() {
     fetchData();
   }, [token, navigate, logout]);
 
+  // Compute streak from days
+  const streak = useMemo(() => {
+    if (!days || days.length === 0) return 0;
+    const todayStr = new Date().toISOString().slice(0, 10);
+    let count = 0;
+    let cursor = new Date(todayStr);
+    const dateSet = new Set(days.map(d => d.date?.slice(0, 10)));
+    while (dateSet.has(cursor.toISOString().slice(0, 10))) {
+      count++;
+      cursor.setDate(cursor.getDate() - 1);
+    }
+    return count;
+  }, [days]);
+
   if (loading) return (
-    <DashboardLayout goal={goal}>
+    <DashboardLayout goal={goal} overlayClass="bg-mastery">
       <div className="premium-page" style={{ alignItems: 'center', justifyContent: 'center', minHeight: '60vh' }}>
         <Sparkles className="spin" size={40} color="var(--accent-primary)" />
-        <p className="premium-muted">Calculating ranking telemetry...</p>
+        <p className="premium-muted">Calculating your rank...</p>
       </div>
     </DashboardLayout>
   );
 
   if (!profile) return (
-    <DashboardLayout goal={goal}>
+    <DashboardLayout goal={goal} overlayClass="bg-mastery">
       <div className="premium-page" style={{ alignItems: 'center', justifyContent: 'center', minHeight: '60vh' }}>
         <Shield size={40} color="var(--danger)" />
-        <p className="premium-muted">Failed to synchronize profile. Please re-authenticate.</p>
+        <p className="premium-muted">Could not load your profile. Please log in again.</p>
         <button className="btn btn-outline" style={{ marginTop: '1rem' }} onClick={() => navigate('/login')}>Return to Login</button>
       </div>
     </DashboardLayout>
@@ -98,15 +113,15 @@ function Mastery() {
   const currentTier = getTier(profile.level);
   const nextTiers = TIERS.filter(t => t.level > profile.level).slice(0, 3);
   const currentExp = (profile.total_xp || 0) % 1000;
-  const progressPercent = (currentExp / 1000) * 100;
+  const progressPercent = Math.min(100, Math.round((currentExp / 1000) * 100));
 
   return (
-    <DashboardLayout goal={goal}>
+    <DashboardLayout goal={goal} overlayClass="bg-mastery">
       <div className="premium-page">
         <header className="premium-header">
-          <p className="premium-kicker">Ranking System</p>
-          <h1 className="premium-title">Performance Hierarchy</h1>
-          <p className="premium-subtitle">Your rank is determined by cumulative consistency and high-output cycles across all active experiments.</p>
+          <p className="premium-kicker">Progress System</p>
+          <h1 className="premium-title">Your Rank & Level</h1>
+          <p className="premium-subtitle">Your rank is based on how consistent you are with your daily goals and tasks.</p>
         </header>
 
         <div className="premium-grid-two" style={{ gridTemplateColumns: 'minmax(0, 1.3fr) minmax(0, 0.7fr)' }}>
@@ -173,7 +188,7 @@ function Mastery() {
               {currentTier.title}
             </h2>
             <p className="premium-muted" style={{ fontWeight: 700, marginBottom: '2rem', zIndex: 1, letterSpacing: '0.05em', textTransform: 'uppercase' }}>
-              Total Accumulation: {profile.total_xp?.toLocaleString() || 0} XP
+              Total Points: {profile.total_xp?.toLocaleString() || 0} XP
             </p>
 
             <div style={{ width: '100%', maxWidth: '340px', zIndex: 1 }}>
@@ -228,12 +243,17 @@ function Mastery() {
           </section>
         </div>
 
+        {/* MILESTONE BADGES */}
+        <section className="premium-section">
+          <MilestonesBadge streak={streak} />
+        </section>
+
         {/* RECENT PERFORMANCE FEED */}
         <section className="premium-section">
-          <h3 className="premium-mini-title"><Activity size={18} className="text-secondary" /> Recent Signal Quality</h3>
+          <h3 className="premium-mini-title"><Activity size={18} className="text-secondary" /> Recent Daily Scores</h3>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '1rem', marginTop: '1.5rem' }}>
             {days.length === 0 ? (
-              <p className="premium-empty" style={{ gridColumn: '1/-1', textAlign: 'center', padding: '2rem' }}>No telemetry data detected for the active experiment.</p>
+              <p className="premium-empty" style={{ gridColumn: '1/-1', textAlign: 'center', padding: '2rem' }}>No progress data found for this goal yet.</p>
             ) : (
               days.map((day) => (
                 <div key={day.date} style={{ 
@@ -252,7 +272,7 @@ function Mastery() {
                     </p>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.7rem', color: 'var(--text-secondary)', fontWeight: 600 }}>
                       <span className="badge badge-purple" style={{ fontSize: '0.6rem', padding: '1px 8px' }}>
-                        {day.tasks?.length || 0} SECTORS
+                        {day.tasks?.length || 0} TASKS
                       </span>
                     </div>
                   </div>

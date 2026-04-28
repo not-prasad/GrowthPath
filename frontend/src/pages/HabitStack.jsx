@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import DashboardLayout from '../components/DashboardLayout';
 import { useAuth } from '../context/AuthContext';
+import { API_BASE, authHeaders, safeJson } from '../api/base';
 
 function HabitStack() {
   const [goal, setGoal] = useState(null);
@@ -18,8 +19,7 @@ function HabitStack() {
   const { token, logout } = useAuth();
   const navigate = useNavigate();
 
-  const API_BASE = 'http://localhost:5000/api';
-  const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
+  const headers = { ...authHeaders(token), 'Content-Type': 'application/json' };
 
   useEffect(() => {
     const goalId = localStorage.getItem('growthpath_goal_id');
@@ -32,8 +32,8 @@ function HabitStack() {
           fetch(`${API_BASE}/habits`, { headers: { Authorization: `Bearer ${token}` } }),
         ]);
         if (goalRes.status === 401 || habitsRes.status === 401) { logout(); navigate('/login'); return; }
-        if (goalRes.ok) setGoal(await goalRes.json());
-        if (habitsRes.ok) setHabits(await habitsRes.json());
+        if (goalRes.ok) setGoal((await safeJson(goalRes)) || null);
+        if (habitsRes.ok) setHabits((await safeJson(habitsRes)) || []);
       } catch {
         setError('Failed to load data.');
       } finally {
@@ -54,8 +54,8 @@ function HabitStack() {
         headers,
         body: JSON.stringify({ trigger_habit: trigger, new_habit: newHabit }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed');
+      const data = await safeJson(res);
+      if (!res.ok) throw new Error(data?.error || 'Failed');
       setHabits(prev => [data, ...prev]);
       setTrigger('');
       setNewHabit('');
@@ -76,21 +76,21 @@ function HabitStack() {
   };
 
   if (loading) return (
-    <DashboardLayout goal={goal}>
+    <DashboardLayout goal={goal} overlayClass="bg-history">
       <div className="premium-page" style={{ alignItems: 'center', justifyContent: 'center', minHeight: '60vh' }}>
         <Sparkles className="spin" size={40} color="var(--accent-primary)" />
-        <p className="premium-muted">Linking neural pathways...</p>
+        <p className="premium-muted">Loading your habits...</p>
       </div>
     </DashboardLayout>
   );
 
   return (
-    <DashboardLayout goal={goal}>
+    <DashboardLayout goal={goal} overlayClass="bg-history">
       <div className="premium-page">
         <header className="premium-header">
-          <p className="premium-kicker">Routine Architecture</p>
-          <h1 className="premium-title">Habit Stacking</h1>
-          <p className="premium-subtitle">Chain new behaviors to existing anchors to maximize neurological efficiency.</p>
+          <p className="premium-kicker">Habit Building</p>
+          <h1 className="premium-title">Habit Stacks</h1>
+          <p className="premium-subtitle">Connect new habits to your existing routine to make them stick.</p>
         </header>
 
         {/* Formula Explainer */}
@@ -114,7 +114,7 @@ function HabitStack() {
               The Stacking Formula
             </h3>
             <p style={{ fontSize: '0.9rem', opacity: 0.9, color: '#fff', lineHeight: 1.5 }}>
-              "After I <strong>[Current Anchor]</strong>, I will <strong>[New Vector]</strong>."
+              "After I <strong>[Starting Habit]</strong>, I will <strong>[New Habit]</strong>."
               <br/><span style={{ fontSize: '0.75rem', opacity: 0.7 }}>— James Clear, Atomic Habits</span>
             </p>
           </div>
@@ -123,10 +123,10 @@ function HabitStack() {
         <div className="premium-grid-two" style={{ gridTemplateColumns: 'minmax(0, 0.8fr) minmax(0, 1.2fr)' }}>
           {/* Add Form */}
           <section className="premium-section" style={{ padding: '2rem' }}>
-            <h3 className="premium-mini-title"><Plus size={18} className="text-secondary" /> New Neural Link</h3>
+            <h3 className="premium-mini-title"><Plus size={18} className="text-secondary" /> New Habit Pair</h3>
             <form onSubmit={handleAdd} style={{ marginTop: '1.5rem' }}>
               <div className="form-group">
-                <label style={{ fontSize: '0.75rem', fontWeight: 800, textTransform: 'uppercase', color: 'var(--text-muted)' }}>Anchor Point</label>
+                <label style={{ fontSize: '0.75rem', fontWeight: 800, textTransform: 'uppercase', color: 'var(--text-muted)' }}>After I...</label>
                 <input
                   id="trigger-habit"
                   className="form-control"
@@ -147,11 +147,11 @@ function HabitStack() {
               </div>
 
               <div className="form-group">
-                <label style={{ fontSize: '0.75rem', fontWeight: 800, textTransform: 'uppercase', color: 'var(--text-muted)' }}>New Behavior</label>
+                <label style={{ fontSize: '0.75rem', fontWeight: 800, textTransform: 'uppercase', color: 'var(--text-muted)' }}>I will...</label>
                 <input
                   id="new-habit"
                   className="form-control"
-                  placeholder="e.g., Write 3 task sectors"
+                  placeholder="e.g., Write down my daily goals"
                   value={newHabit}
                   onChange={e => setNewHabit(e.target.value)}
                   style={{ marginTop: '0.5rem', background: 'var(--bg-color)' }}
@@ -169,7 +169,7 @@ function HabitStack() {
                 disabled={saving}
                 style={{ width: '100%', marginTop: '1rem', padding: '0.875rem' }}
               >
-                {saving ? 'Synchronizing...' : <><Link size={18} /> Initialize Stack</>}
+                {saving ? 'Saving...' : <><Link size={18} /> Add Habit Stack</>}
               </button>
             </form>
           </section>
@@ -179,7 +179,7 @@ function HabitStack() {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
               <h3 className="premium-mini-title"><Activity size={18} className="text-secondary" /> Active Stacks</h3>
               <span className="badge badge-purple">
-                {habits.length} UNITS
+                {habits.length} HABITS
               </span>
             </div>
 
@@ -190,7 +190,7 @@ function HabitStack() {
                 border: '2px dashed var(--panel-border)', background: 'var(--bg-color)'
               }}>
                 <Layers size={40} style={{ opacity: 0.15, marginBottom: '1rem' }} />
-                <p style={{ fontSize: '0.9rem', fontWeight: 600 }}>No neural links detected.</p>
+                <p style={{ fontSize: '0.9rem', fontWeight: 600 }}>No habit stacks yet.</p>
               </div>
             )}
 
@@ -210,7 +210,7 @@ function HabitStack() {
                   }}
                 >
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <p style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontWeight: 800, textTransform: 'uppercase', marginBottom: '0.25rem' }}>Anchor</p>
+                    <p style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontWeight: 800, textTransform: 'uppercase', marginBottom: '0.25rem' }}>When I...</p>
                     <p style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                       {h.trigger_habit}
                     </p>
@@ -219,7 +219,7 @@ function HabitStack() {
                   <ChevronRight size={20} className="text-secondary" style={{ flexShrink: 0, opacity: 0.5 }} />
 
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <p style={{ fontSize: '0.65rem', color: 'var(--accent-primary)', fontWeight: 800, textTransform: 'uppercase', marginBottom: '0.25rem' }}>Vector</p>
+                    <p style={{ fontSize: '0.65rem', color: 'var(--accent-primary)', fontWeight: 800, textTransform: 'uppercase', marginBottom: '0.25rem' }}>Then I will...</p>
                     <p style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                       {h.new_habit}
                     </p>

@@ -13,46 +13,35 @@ export default function Heatmap({ logs }) {
 
   const monthsData = useMemo(() => {
     const today = new Date();
-    // Generate data for current month and previous 2 months
-    const monthBlocks = [];
-    
-    for (let i = 2; i >= 0; i--) {
-      const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
-      const month = d.getMonth();
-      const year = d.getFullYear();
-      
-      const firstDayOfMonth = new Date(year, month, 1).getDay();
-      const daysInMonth = new Date(year, month + 1, 0).getDate();
-      
-      const days = [];
-      // Padding for the start of the month
-      for (let p = 0; p < firstDayOfMonth; p++) {
-        days.push(null);
-      }
-      
-      // Actual days
-      for (let day = 1; day <= daysInMonth; day++) {
-        const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-        const logEntry = logs?.find(l => l.log_date.startsWith(dateStr));
-        
-        days.push({
-          day,
-          date: dateStr,
-          done: logEntry?.task_done,
-          focus: logEntry?.focus_level,
-          mood: logEntry?.mood,
-          notes: logEntry?.notes
-        });
-      }
-      
-      monthBlocks.push({
-        name: MONTH_NAMES[month],
-        year,
-        days
+    // Generate data for the current month only
+    const month = today.getMonth();
+    const year = today.getFullYear();
+
+    const firstDayOfMonth = new Date(year, month, 1).getDay();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+    const days = [];
+    // Padding for the start of the month
+    for (let p = 0; p < firstDayOfMonth; p++) {
+      days.push(null);
+    }
+
+    // Actual days
+    for (let day = 1; day <= daysInMonth; day++) {
+      const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+      const logEntry = logs?.find(l => l.log_date.startsWith(dateStr));
+
+      days.push({
+        day,
+        date: dateStr,
+        done: logEntry?.task_done,
+        focus: logEntry?.focus_level,
+        mood: logEntry?.mood,
+        notes: logEntry?.notes
       });
     }
-    
-    return monthBlocks;
+
+    return [{ name: MONTH_NAMES[month], year, days }];
   }, [logs]);
 
   const getColor = (entry) => {
@@ -75,11 +64,11 @@ export default function Heatmap({ logs }) {
           <h3 style={{ fontSize: '1.125rem', fontWeight: 800, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
             <Calendar size={18} color="var(--accent-primary)" /> Consistency Intelligence
           </h3>
-          <p style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>Track your monthly trajectory and focus patterns.</p>
+          <p style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>Your focus trajectory for this month.</p>
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '2rem' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '2rem' }}>
         {monthsData.map((month, mIdx) => (
           <div key={mIdx} style={{ animation: `fadeIn 0.5s ease-out ${mIdx * 0.1}s both` }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>

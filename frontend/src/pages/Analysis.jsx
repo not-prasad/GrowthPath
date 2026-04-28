@@ -6,11 +6,12 @@ import {
 } from 'recharts';
 import { 
   ChevronDown, ChevronRight, TrendingUp, BarChart3, Activity, 
-  Target, Calendar, Sparkles, AlertCircle, Info, Beaker
+  Target, Calendar, Sparkles, AlertCircle, Info, Beaker, Download
 } from 'lucide-react';
 import DashboardLayout from '../components/DashboardLayout';
 import { useAuth } from '../context/AuthContext';
 import Heatmap from '../components/Heatmap';
+import { generatePDF } from '../components/ExportPDF';
 import { API_BASE, authHeaders, safeJson } from '../api/base';
 
 function Analysis() {
@@ -88,49 +89,96 @@ function Analysis() {
   const averageScore = Number(line?.stats?.avg_last_7_days || 0).toFixed(1);
   const trendDirection = line?.stats?.delta > 1 ? 'Up' : line?.stats?.delta < -1 ? 'Down' : 'Stable';
 
+  // Streak computation for PDF
+  const streak = (() => {
+    if (!days.length) return 0;
+    let count = 0;
+    let cursor = new Date(new Date().toISOString().slice(0, 10));
+    const dateSet = new Set(days.map(d => d.date?.slice(0, 10)));
+    while (dateSet.has(cursor.toISOString().slice(0, 10))) {
+      count++;
+      cursor.setDate(cursor.getDate() - 1);
+    }
+    return count;
+  })();
+
+  const handleExport = () => {
+    const pdfLogs = days.map(d => ({
+      log_date: d.date,
+      task_done: (d.performance_score || 0) >= 70,
+      mood: d.mood || null,
+      focus_level: d.focus_level,
+      notes: d.notes,
+    }));
+    const completed = days.filter(d => (d.performance_score || 0) >= 70).length;
+    const totalFocus = days.reduce((a, d) => a + (d.focus_level || 0), 0);
+    generatePDF({
+      goal,
+      logs: pdfLogs,
+      analysis: {
+        completion_rate: days.length ? Math.round((completed / days.length) * 100) : 0,
+        average_focus: days.length ? totalFocus / days.length : 0,
+        total_days_logged: days.length,
+      },
+      streak,
+    });
+  };
+
   if (loading) {
     return (
-      <DashboardLayout goal={goal}>
+      <DashboardLayout goal={goal} overlayClass="bg-analysis">
         <div className="premium-page" style={{ alignItems: 'center', justifyContent: 'center', minHeight: '60vh' }}>
           <Sparkles className="spin" size={40} color="var(--accent-primary)" />
-          <p className="premium-muted">Synthesizing patterns...</p>
+          <p className="premium-muted">Analyzing your progress...</p>
         </div>
       </DashboardLayout>
     );
   }
 
   return (
-    <DashboardLayout goal={goal}>
+    <DashboardLayout goal={goal} overlayClass="bg-analysis">
       <div className="premium-page">
         <header className="premium-header">
-          <p className="premium-kicker">Deep Pattern Analytics</p>
-          <h1 className="premium-title">What the data says.</h1>
-          <p className="premium-subtitle">
-            {line?.interpretation || 'Synthesizing your performance architecture based on recent entries.'}
-          </p>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', width: '100%' }}>
+            <div>
+              <p className="premium-kicker">Detailed Progress</p>
+              <h1 className="premium-title">What the data says.</h1>
+              <p className="premium-subtitle">
+                {line?.interpretation || 'Analyzing your progress patterns based on your recent logs.'}
+              </p>
+            </div>
+            <button
+              className="btn btn-outline"
+              onClick={handleExport}
+              disabled={days.length === 0}
+              style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', whiteSpace: 'nowrap', marginTop: '0.25rem' }}
+            >
+              <Download size={16} /> Export PDF
+            </button>
+          </div>
         </header>
 
         <section className="premium-section">
           <div className="premium-metric-row">
             <div className="premium-metric">
-              <p className="premium-metric-label">Efficiency Index</p>
+              <p className="premium-metric-label">Average Score</p>
               <p className="premium-metric-value">{averageScore}</p>
             </div>
             <div className="premium-metric">
-              <p className="premium-metric-label">Momentum</p>
+              <p className="premium-metric-label">Trend</p>
               <p className="premium-metric-value" style={{ color: trendDirection === 'Up' ? 'var(--success)' : trendDirection === 'Down' ? 'var(--danger)' : 'var(--text-primary)' }}>
                 {trendDirection}
               </p>
             </div>
             <div className="premium-metric">
-              <p className="premium-metric-label">Data Points</p>
+              <p className="premium-metric-label">Total Logs</p>
               <p className="premium-metric-value">{days.length}</p>
             </div>
           </div>
         </section>
 
         <section className="premium-section">
-          <h2 className="premium-section-title"><TrendingUp size={20} className="text-secondary" /> Performance Architecture</h2>
+          <h2 className="premium-section-title"><TrendingUp size={20} className="text-secondary" /> Score History</h2>
           {line?.data?.data?.length > 0 ? (
             <div style={{ height: 320, width: '100%', marginTop: '1rem' }}>
               <ResponsiveContainer width="100%" height="100%">
@@ -168,7 +216,7 @@ function Analysis() {
 
         <div className="premium-grid-two">
           <section className="premium-section">
-            <h2 className="premium-section-title"><BarChart3 size={20} className="text-secondary" /> Volume Completion</h2>
+            <h2 className="premium-section-title"><BarChart3 size={20} className="text-secondary" /> Tasks Completed</h2>
             {categoryBar?.data?.data?.length > 0 ? (
               <ResponsiveContainer width="100%" height={220}>
                 <BarChart data={categoryBar.data.data} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
@@ -187,29 +235,29 @@ function Analysis() {
           </section>
 
           <section className="premium-section">
-             <h2 className="premium-section-title"><Sparkles size={20} className="text-secondary" /> AI Analyst Brief</h2>
+             <h2 className="premium-section-title"><Sparkles size={20} className="text-secondary" /> AI Summary</h2>
              {brief ? (
                <div className="premium-insight-list">
                  <div style={{ padding: '1rem', background: 'var(--bg-color)', borderRadius: '12px', border: '1px solid var(--panel-border)' }}>
-                    <p className="premium-insight-item" style={{ fontSize: '0.85rem' }}><span>Analyst Verdict:</span> {brief.daily_analyst_brief}</p>
+                    <p className="premium-insight-item" style={{ fontSize: '0.85rem' }}><span>AI Opinion:</span> {brief.daily_analyst_brief}</p>
                  </div>
                  <div style={{ padding: '1rem', background: 'var(--accent-subtle)', borderRadius: '12px', border: '1px solid var(--accent-border)' }}>
-                    <p className="premium-insight-item" style={{ fontSize: '0.85rem', color: 'var(--accent-primary)' }}><span>Root Cause:</span> {brief.root_cause_dip_detection}</p>
+                    <p className="premium-insight-item" style={{ fontSize: '0.85rem', color: 'var(--accent-primary)' }}><span>Main Issue:</span> {brief.root_cause_dip_detection}</p>
                  </div>
                  <div style={{ padding: '1rem', background: 'var(--bg-color)', borderRadius: '12px', border: '1px solid var(--panel-border)' }}>
-                    <p className="premium-insight-item" style={{ fontSize: '0.85rem' }}><span>The Macro view:</span> {brief.weekly_retro}</p>
+                    <p className="premium-insight-item" style={{ fontSize: '0.85rem' }}><span>Overall View:</span> {brief.weekly_retro}</p>
                  </div>
                </div>
              ) : (
-               <p className="premium-empty">AI analyst is still observing your flow.</p>
+               <p className="premium-empty">AI is still analyzing your progress.</p>
              )}
           </section>
         </div>
 
         <section className="premium-section" style={{ padding: 0, border: 'none', background: 'transparent', boxShadow: 'none' }}>
           <button className="premium-accordion-trigger" onClick={() => setAdvancedOpen((s) => !s)}>
-            <span>{advancedOpen ? <ChevronDown size={18} /> : <ChevronRight size={18} />} Advanced Laboratory Analysis</span>
-            <span className="premium-muted" style={{ fontWeight: 600 }}>{advancedMode ? 'Extended mode active' : 'View raw signals'}</span>
+            <span>{advancedOpen ? <ChevronDown size={18} /> : <ChevronRight size={18} />} Advanced Analysis</span>
+            <span className="premium-muted" style={{ fontWeight: 600 }}>{advancedMode ? 'Advanced view active' : 'View raw data'}</span>
           </button>
           
           {advancedOpen && (
@@ -228,7 +276,7 @@ function Analysis() {
 
                 <div className="premium-grid-two" style={{ gap: '2rem' }}>
                   <div>
-                    <h3 className="premium-mini-title"><Calendar size={16} /> Weekday distribution</h3>
+                    <h3 className="premium-mini-title"><Calendar size={16} /> Weekday scores</h3>
                     {weekday?.data?.data?.length > 0 ? (
                       <ResponsiveContainer width="100%" height={180}>
                         <BarChart data={weekday.data.data}>
@@ -243,8 +291,8 @@ function Analysis() {
                   </div>
 
                   <div style={{ background: 'var(--bg-color)', padding: '1.5rem', borderRadius: '16px', border: '1px solid var(--panel-border)' }}>
-                    <h3 className="premium-mini-title"><Target size={16} /> Signal Consistency</h3>
-                    <p className="premium-muted" style={{ lineHeight: 1.6 }}>{boxplot?.interpretation || 'Collecting more data samples for high-confidence consistency check.'}</p>
+                    <h3 className="premium-mini-title"><Target size={16} /> Consistency</h3>
+                    <p className="premium-muted" style={{ lineHeight: 1.6 }}>{boxplot?.interpretation || 'Collecting more data for a better consistency check.'}</p>
                     {advancedMode && boxplot?.data && (
                       <pre className="premium-pre">{JSON.stringify(boxplot?.stats || boxplot?.data || {}, null, 2)}</pre>
                     )}
@@ -303,7 +351,7 @@ function Analysis() {
           }}>
             <Heatmap logs={heatmapLogs} />
           </div>
-          <p className="premium-muted" style={{ fontSize: '0.85rem' }}>Visualizing the last 30 days of behavioral density.</p>
+          <p className="premium-muted" style={{ fontSize: '0.85rem' }}>Visualizing your full behavioral density history.</p>
         </section>
       </div>
     </DashboardLayout>

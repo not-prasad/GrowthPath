@@ -1,14 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, ArrowRight, CheckCircle2, Zap, X, TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import { ArrowLeft, ArrowRight, CheckCircle2, Zap, X, TrendingUp, TrendingDown, Minus, CheckCircle, Circle, Sparkles } from 'lucide-react';
 import DashboardLayout from '../components/DashboardLayout';
 import { useAuth } from '../context/AuthContext';
 import { API_BASE, authHeaders, safeJson } from '../api/base';
 
 const ENERGY_OPTIONS = [
-  { id: 'High',   label: 'High',   desc: 'Operating above baseline' },
-  { id: 'Stable', label: 'Stable', desc: 'Consistent. On par.' },
-  { id: 'Low',    label: 'Low',    desc: 'Below operational baseline' },
+  { id: 'High',   label: 'High',   desc: 'Feeling great and productive' },
+  { id: 'Stable', label: 'Stable', desc: 'A normal, steady day' },
+  { id: 'Low',    label: 'Low',    desc: 'Feeling a bit tired or slow' },
 ];
 
 const OBJECTIVE_OPTIONS = [
@@ -42,7 +42,7 @@ export default function PerformanceInput() {
 
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState(null); // submission output
-  const { token, logout } = useAuth();
+  const { token, logout, updateUser } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -101,6 +101,9 @@ export default function PerformanceInput() {
       });
       if (res.ok) {
         const data = await safeJson(res);
+        if (data.total_xp !== undefined) {
+          updateUser({ total_xp: data.total_xp, level: data.level });
+        }
         setResult(data);
         // Refresh today tasks to reflect any completion changes (if user edited them elsewhere)
         const today = new Date().toISOString().slice(0, 10);
@@ -113,6 +116,30 @@ export default function PerformanceInput() {
       console.error(e);
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const [generatingTasks, setGeneratingTasks] = useState(false);
+
+  const generateAiTasks = async () => {
+    if (!goal) return;
+    setGeneratingTasks(true);
+    try {
+      const goalId = localStorage.getItem('growthpath_goal_id');
+      const today = new Date().toISOString().slice(0, 10);
+      const res = await fetch(`${API_BASE}/tasks/generate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeaders(token) },
+        body: JSON.stringify({ goal_id: goalId, log_date: today }),
+      });
+      if (res.ok) {
+        const data = await safeJson(res);
+        setTodayTasks(data.tasks || []);
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setGeneratingTasks(false);
     }
   };
 
@@ -154,14 +181,17 @@ export default function PerformanceInput() {
         method: 'PUT',
         headers: authHeaders(token),
       });
-      if (res.ok) {
+        const data = await safeJson(res);
+        if (data.total_xp !== undefined) {
+          updateUser({ total_xp: data.total_xp, level: data.level });
+        }
+        
         const goalId = localStorage.getItem('growthpath_goal_id');
         const today = new Date().toISOString().slice(0, 10);
         const todayRes = await fetch(`${API_BASE}/logs?goal_id=${goalId}&from=${today}&to=${today}&limit=1`, { headers: authHeaders(token) });
         const payload = await safeJson(todayRes);
         const day = payload?.days?.[0];
         setTodayTasks(day?.tasks || []);
-      }
     } catch (e) {
       console.error(e);
     }
@@ -198,24 +228,24 @@ export default function PerformanceInput() {
     const TrendIcon = score >= 70 ? TrendingUp : score >= 40 ? Minus : TrendingDown;
 
     return (
-      <DashboardLayout goal={goal}>
+      <DashboardLayout goal={goal} overlayClass="bg-dailylog">
         <div className="premium-page fade-in">
           <section className="premium-section">
-            <p className="premium-kicker">Today Summary — {new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</p>
+            <p className="premium-kicker">Daily Summary — {new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</p>
 
             {/* Score */}
             <div style={{ display: 'flex', alignItems: 'flex-end', gap: '0.5rem', marginBottom: '2rem', paddingBottom: '2rem', borderBottom: '1px solid var(--panel-border)' }}>
               <span style={{ fontSize: '4rem', fontWeight: 800, lineHeight: 1, color: 'var(--text-primary)', fontVariantNumeric: 'tabular-nums' }}>{score}</span>
               <span style={{ fontSize: '1rem', color: 'var(--text-muted)', marginBottom: '0.5rem', fontWeight: 600 }}>/100</span>
-              <span style={{ marginLeft: 'auto', fontSize: '0.875rem', fontWeight: 700, color: 'var(--text-muted)' }}>Daily Performance Score</span>
+              <span style={{ marginLeft: 'auto', fontSize: '0.875rem', fontWeight: 700, color: 'var(--text-muted)' }}>Your Daily Score</span>
             </div>
 
             {/* Metrics Grid */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem', marginBottom: '2rem' }}>
               {[
                 { label: 'XP Earned', value: `+${result?.log?.xp_gained || 0}`, color: 'var(--accent-primary)' },
-                { label: 'Consistency Index', value: trend, color: trendColor },
-                { label: 'Energy State', value: result?.log?.energy_state || 'Stable', color: 'var(--text-primary)' },
+                { label: 'Progress Trend', value: trend, color: trendColor },
+                { label: 'Energy Level', value: result?.log?.energy_state || 'Stable', color: 'var(--text-primary)' },
               ].map(m => (
                 <div key={m.label} style={{ background: 'var(--bg-color)', borderRadius: '8px', padding: '1rem', border: '1px solid var(--panel-border)' }}>
                   <p style={{ fontSize: '0.6rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '0.5rem' }}>{m.label}</p>
@@ -234,7 +264,7 @@ export default function PerformanceInput() {
   }
 
   return (
-    <DashboardLayout goal={goal}>
+    <DashboardLayout goal={goal} overlayClass="bg-dailylog">
       <div className="premium-page fade-in">
 
         {/* Header */}
@@ -245,9 +275,9 @@ export default function PerformanceInput() {
           <p className="premium-kicker">
             {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
           </p>
-          <h1 className="premium-title">What happened today?</h1>
+          <h1 className="premium-title">How was your day?</h1>
           <p className="premium-subtitle">
-            Capture tasks, focus, friction, and notes in one clean daily log.
+            Track your tasks, focus, obstacles, and notes in one simple log.
           </p>
         </div>
 
@@ -255,7 +285,7 @@ export default function PerformanceInput() {
 
           {/* Tasks for today */}
           <div style={section}>
-            <span style={label}>Today’s Protocol Tasks</span>
+            <span style={label}>Today’s Tasks</span>
             <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '0.75rem' }}>
               <select value={newTaskType} onChange={e => setNewTaskType(e.target.value)} className="form-control" style={{ width: '160px' }}>
                 <option value="primary">primary</option>
@@ -276,6 +306,18 @@ export default function PerformanceInput() {
               </button>
             </div>
 
+            <div style={{ marginBottom: '1.25rem' }}>
+               <button 
+                className="btn btn-outline" 
+                onClick={generateAiTasks} 
+                disabled={generatingTasks}
+                style={{ width: '100%', fontSize: '0.75rem', padding: '0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', background: 'rgba(99, 102, 241, 0.05)', borderColor: 'rgba(99, 102, 241, 0.2)' }}
+               >
+                 <Sparkles size={14} color="var(--accent-primary)" />
+                 {generatingTasks ? 'Planning...' : 'Generate AI Tasks for Today'}
+               </button>
+            </div>
+
             {todayTasks.length === 0 ? (
               <p style={{ color: 'var(--text-muted)', fontSize: '0.8125rem' }}>No tasks added for today yet.</p>
             ) : (
@@ -284,16 +326,45 @@ export default function PerformanceInput() {
                   <button
                     key={t.id}
                     onClick={() => toggleTask(t.id)}
-                    className="btn btn-outline"
-                    style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', padding: '0.75rem 0.875rem', background: 'var(--bg-color)', border: '1px solid var(--panel-border)', borderRadius: '8px', textAlign: 'left' }}
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      gap: '1rem',
+                      padding: '0.75rem 0.875rem',
+                      background: t.is_completed ? 'rgba(16,185,129,0.06)' : 'var(--bg-color)',
+                      border: `1px solid ${t.is_completed ? 'rgba(16,185,129,0.3)' : 'var(--panel-border)'}`,
+                      borderRadius: '8px',
+                      textAlign: 'left',
+                      cursor: 'pointer',
+                      width: '100%',
+                      transition: 'all 0.2s ease',
+                    }}
                   >
-                    <div style={{ minWidth: 0 }}>
-                      <p style={{ fontSize: '0.8125rem', fontWeight: 800, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.title}</p>
-                      <p style={{ fontSize: '0.625rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{t.task_type}</p>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', minWidth: 0 }}>
+                      {t.is_completed
+                        ? <CheckCircle size={18} style={{ color: 'var(--success)', flexShrink: 0 }} />
+                        : <Circle size={18} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
+                      }
+                      <div style={{ minWidth: 0 }}>
+                        <p style={{
+                          fontSize: '0.8125rem', fontWeight: 700,
+                          color: t.is_completed ? 'var(--text-muted)' : 'var(--text-primary)',
+                          textDecoration: t.is_completed ? 'line-through' : 'none',
+                          whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'
+                        }}>{t.title}</p>
+                        <p style={{ fontSize: '0.625rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{t.task_type}</p>
+                      </div>
                     </div>
-                    <div style={{ fontSize: '0.75rem', fontWeight: 800, color: t.is_completed ? 'var(--success)' : 'var(--text-muted)' }}>
-                      {t.is_completed ? 'Completed' : 'Pending'} (toggle)
-                    </div>
+                    <span style={{
+                      fontSize: '0.7rem', fontWeight: 700, flexShrink: 0,
+                      padding: '0.2rem 0.6rem', borderRadius: '6px',
+                      background: t.is_completed ? 'var(--success-subtle)' : 'var(--panel-bg)',
+                      color: t.is_completed ? 'var(--success)' : 'var(--text-muted)',
+                      border: `1px solid ${t.is_completed ? 'rgba(16,185,129,0.2)' : 'var(--panel-border)'}`,
+                    }}>
+                      {t.is_completed ? 'Done' : 'Pending'}
+                    </span>
                   </button>
                 ))}
               </div>
@@ -302,7 +373,7 @@ export default function PerformanceInput() {
 
           {/* Variable 1: Energy State */}
           <div style={section}>
-            <span style={label}>Input Energy State</span>
+            <span style={label}>Your Energy Level</span>
             <div style={row}>
               {ENERGY_OPTIONS.map(opt => (
                 <button key={opt.id} onClick={() => setEnergyState(opt.id)} style={chip(energyState === opt.id)}>
@@ -342,7 +413,7 @@ export default function PerformanceInput() {
 
           {/* Variable 4: Friction Variables */}
           <div style={section}>
-            <span style={label}>Friction Variables (select all that apply)</span>
+            <span style={label}>Challenges & Obstacles (select all that apply)</span>
             <div style={row}>
               {FRICTION_OPTIONS.map(f => (
                 <button
@@ -360,11 +431,11 @@ export default function PerformanceInput() {
 
           {/* Variable 5: Observational Notes */}
           <div style={{ marginBottom: '2rem' }}>
-            <span style={label}>Observational Notes <span style={{ fontWeight: 400, color: 'var(--text-muted)' }}>(optional)</span></span>
+            <span style={label}>Additional Notes <span style={{ fontWeight: 400, color: 'var(--text-muted)' }}>(optional)</span></span>
             <textarea
               value={notes}
               onChange={e => setNotes(e.target.value)}
-              placeholder="Record any variables, deviations, or hypotheses for tomorrow..."
+              placeholder="Write anything else you want to track or remember about today..."
               style={{
                 width: '100%', background: 'var(--bg-color)', border: '1px solid var(--panel-border)',
                 borderRadius: '8px', padding: '0.875rem 1rem', color: 'var(--text-primary)',
@@ -376,7 +447,7 @@ export default function PerformanceInput() {
 
           {/* Submit */}
           <button onClick={handleSubmit} disabled={submitting} className="btn btn-primary" style={{ width: '100%' }}>
-            {submitting ? 'Processing...' : <><ArrowRight size={16} /> Submit Performance Log</>}
+            {submitting ? 'Saving...' : <><ArrowRight size={16} /> Save Daily Log</>}
           </button>
         </section>
       </div>
