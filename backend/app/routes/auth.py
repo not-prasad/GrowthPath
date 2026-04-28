@@ -7,10 +7,10 @@ from ..utils.errors import ApiError
 from ..utils.validation import require_json, as_str
 
 
-bp = Blueprint("auth", __name__, url_prefix="/api")
+bp = Blueprint("auth", __name__, url_prefix="/api/auth")
 
 
-@bp.post("/auth/register")
+@bp.post("/register")
 def register():
     data = require_json(request)
     email = as_str(data.get("email"), field="email", min_len=3, max_len=320)
@@ -30,7 +30,7 @@ def register():
     return jsonify({"token": token, "user": {"id": user_id, "email": email}}), 201
 
 
-@bp.post("/auth/login")
+@bp.post("/login")
 def login():
     data = require_json(request)
     email = as_str(data.get("email"), field="email", min_len=3, max_len=320)

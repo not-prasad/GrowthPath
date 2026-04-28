@@ -1,4 +1,4 @@
-import React, { createContext, useState, useContext, useEffect } from 'react';
+import React, { createContext, useState, useContext, useEffect, useCallback, useMemo } from 'react';
 import { API_BASE, authHeaders } from '../api/base';
 
 const AuthContext = createContext(null);
@@ -8,6 +8,9 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  // Memoize auth headers to prevent redundant objects
+  const headers = useMemo(() => authHeaders(token), [token]);
+
   useEffect(() => {
     const storedToken = localStorage.getItem('growthpath_token');
     const storedUser = localStorage.getItem('growthpath_user');
@@ -15,8 +18,8 @@ export const AuthProvider = ({ children }) => {
       setToken(storedToken);
       setUser(JSON.parse(storedUser));
       
-      // Sync with server
-      fetch(`${API_BASE}/me`, { headers: authHeaders(storedToken) })
+      // Sync with server (Standardized endpoint)
+      fetch(`${API_BASE}/auth/me`, { headers: authHeaders(storedToken) })
         .then(res => res.json())
         .then(data => {
           if (data.user) {
@@ -29,31 +32,42 @@ export const AuthProvider = ({ children }) => {
     setLoading(false);
   }, []);
 
-  const login = (userData, userToken) => {
+  const login = useCallback((userData, userToken) => {
     localStorage.setItem('growthpath_token', userToken);
     localStorage.setItem('growthpath_user', JSON.stringify(userData));
     setToken(userToken);
     setUser(userData);
-  };
+  }, []);
 
-  const logout = () => {
+  const logout = useCallback(() => {
     localStorage.removeItem('growthpath_token');
     localStorage.removeItem('growthpath_user');
     localStorage.removeItem('growthpath_goal_id');
     setToken(null);
     setUser(null);
-  };
+  }, []);
 
-  const updateUser = (newData) => {
+  const updateUser = useCallback((newData) => {
     setUser(prev => {
+      if (!prev) return null;
       const updated = { ...prev, ...newData };
       localStorage.setItem('growthpath_user', JSON.stringify(updated));
       return updated;
     });
-  };
+  }, []);
+
+  // CRITICAL: Memoize the value object to prevent infinite loops in consumers (Dashboard, Analysis)
+  const value = useMemo(() => ({
+    token,
+    user,
+    login,
+    logout,
+    loading,
+    updateUser
+  }), [token, user, login, logout, loading, updateUser]);
 
   return (
-    <AuthContext.Provider value={{ token, user, login, logout, loading, updateUser }}>
+    <AuthContext.Provider value={value}>
       {!loading && children}
     </AuthContext.Provider>
   );

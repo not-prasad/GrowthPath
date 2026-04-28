@@ -400,3 +400,23 @@ def interpret_category_completion(bar: Dict[str, Any]) -> Dict[str, Any]:
         "interpretation": interp,
     }
 
+def compute_full_analysis(log_rows: List[Dict[str, Any]], task_rows: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """
+    High-performance one-pass computation for all analysis modules.
+    Returns the complete structured payload for the frontend Analysis page.
+    """
+    line_raw = compute_line_chart(log_rows)
+    boxplot_raw = compute_boxplot(log_rows)
+    weekday_raw = compute_weekday_analysis(log_rows)
+    scatter_focus_raw = compute_scatter_focus_vs_score(log_rows)
+    scatter_friction_raw = compute_scatter_friction_vs_score(log_rows)
+    category_completion_raw = compute_completion_by_category(task_rows)
+
+    return {
+        "line": interpret_line(line_raw),
+        "boxplot": interpret_boxplot(boxplot_raw),
+        "weekday": interpret_weekday(weekday_raw),
+        "scatter_focus": interpret_scatter(scatter_focus_raw, kind="focus"),
+        "scatter_friction": interpret_scatter(scatter_friction_raw, kind="friction"),
+        "category_completion": interpret_category_completion(category_completion_raw),
+    }

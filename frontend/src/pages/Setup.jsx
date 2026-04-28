@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Target, ArrowRight } from 'lucide-react';
+import { Target, ArrowRight, Sparkles, Compass } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { API_BASE, apiErrorMessage, authHeaders, safeJson } from '../api/base';
 
@@ -69,132 +69,120 @@ function Setup() {
   const difficulties = ['Easy', 'Medium', 'Hard'];
 
   return (
-    <div className="premium-page fade-in" style={{ minHeight: '100vh', padding: 0 }}>
-      {/* Background Blobs */}
+    <div className="page-center">
+      <div className="theme-bg-layer" />
+      <div className="module-bg-overlay bg-setup" />
+      
       <div className="blob-container">
         <div className="blob blob-1" />
         <div className="blob blob-2" />
         <div className="blob blob-3" />
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(400px, 1fr) 1.5fr', minHeight: '100vh' }}>
-        {/* Left Panel: Context */}
-        <div style={{ 
-          background: 'rgba(255, 255, 255, 0.03)', 
-          backdropFilter: 'blur(40px)', 
-          borderRight: '1px solid var(--panel-border)',
-          padding: '4rem',
-          display: 'flex',
-          flexDirection: 'column',
-          justifyContent: 'center'
-        }}>
-          <div style={{ maxWidth: '440px' }}>
-            <div style={{ 
-              width: '64px', height: '64px', background: 'var(--header-gradient)', borderRadius: '20px', 
-              display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '2.5rem',
-              boxShadow: '0 8px 24px rgba(99, 102, 241, 0.3)'
-            }}>
-              <Target size={32} color="#fff" />
-            </div>
-            <h1 className="premium-title" style={{ fontSize: '3rem', marginBottom: '1.5rem' }}>
-              Initialize <br />New Protocol.
-            </h1>
-            <p className="premium-subtitle" style={{ fontSize: '1.1rem', marginBottom: '3rem' }}>
-              Define your objective, calibrate your timeline, and let the AI architect your daily execution roadmap.
-            </p>
-            
-            <div className="glass-card" style={{ padding: '1.5rem' }}>
-              <p className="premium-kicker" style={{ fontSize: '0.7rem' }}>System Intelligence</p>
-              <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-                Your execution protocol will be dynamically adjusted based on the difficulty and commitment variables you provide.
-              </p>
-            </div>
+      <div className="auth-card" style={{ maxWidth: '800px' }}>
+        <div style={{ textAlign: 'center', marginBottom: '3rem' }}>
+          <div style={{
+            width: '64px', height: '64px', background: 'var(--header-gradient)',
+            borderRadius: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center',
+            margin: '0 auto 1rem', boxShadow: '0 10px 25px rgba(99, 102, 241, 0.4)'
+          }}>
+            <Compass size={32} color="#fff" strokeWidth={2} />
           </div>
+          <h1 className="premium-title">Initialize Protocol</h1>
+          <p className="premium-subtitle" style={{ margin: '0.5rem auto 0' }}>Define your objective and calibrate the AI architect.</p>
         </div>
 
-        {/* Right Panel: Form */}
-        <div style={{ padding: '4rem', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}>
-          <div style={{ width: '100%', maxWidth: '540px' }}>
-            <p className="premium-kicker">Configuration</p>
-            <h2 style={{ fontSize: '1.75rem', fontWeight: 800, marginBottom: '2.5rem' }}>Define Experiment Parameters</h2>
-            
-            <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+        <div className="glass-card" style={{ padding: '3.5rem' }}>
+          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+            <div className="form-group">
+              <label>Primary Objective</label>
+              <input 
+                type="text" 
+                name="title" 
+                className="form-control" 
+                placeholder="e.g. Master React Advanced Patterns"
+                value={formData.title}
+                onChange={handleChange}
+                required 
+              />
+            </div>
+
+            <div className="premium-grid-two">
               <div className="form-group">
-                <label>Primary Objective</label>
+                <label>Timeline (Days)</label>
                 <input 
-                  type="text" 
-                  name="title" 
+                  type="number" 
+                  name="deadline" 
                   className="form-control" 
-                  placeholder="e.g. Master React Advanced Patterns"
-                  value={formData.title}
-                  onChange={handleChange}
-                  required 
-                />
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
-                <div className="form-group">
-                  <label>Timeline (Days)</label>
-                  <input 
-                    type="number" 
-                    name="deadline" 
-                    className="form-control" 
-                    min="1"
-                    placeholder="30"
-                    value={formData.deadline}
-                    onChange={handleChange}
-                    required 
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label>Difficulty Matrix</label>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.5rem' }}>
-                    {difficulties.map(diff => (
-                      <button 
-                        key={diff} 
-                        type="button"
-                        className={`btn ${formData.difficulty === diff ? 'btn-primary' : 'btn-outline'}`}
-                        onClick={() => setSelection('difficulty', diff)}
-                        style={{ padding: '0.625rem 0', fontSize: '0.75rem', justifyContent: 'center' }}
-                      >
-                        {diff}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              <div className="form-group">
-                <label>Daily Allocation</label>
-                <input 
-                  type="text" 
-                  name="commitment" 
-                  className="form-control" 
-                  placeholder="e.g. 2 hours of deep focus"
-                  value={formData.commitment}
+                  min="1"
+                  placeholder="30"
+                  value={formData.deadline}
                   onChange={handleChange}
                   required 
                 />
               </div>
 
               <div className="form-group">
-                <label>Strategic Context <span style={{ fontWeight: 400, opacity: 0.5 }}>(optional)</span></label>
-                <textarea 
-                  name="motivation" 
-                  className="form-control" 
-                  placeholder="Provide context for the AI planner..."
-                  value={formData.motivation}
-                  onChange={handleChange}
-                  style={{ minHeight: '100px' }}
-                ></textarea>
+                <label>Difficulty Matrix</label>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.75rem' }}>
+                  {difficulties.map(diff => (
+                    <button 
+                      key={diff} 
+                      type="button"
+                      className={`btn ${formData.difficulty === diff ? 'btn-primary' : 'btn-outline'}`}
+                      onClick={() => setSelection('difficulty', diff)}
+                      style={{ padding: '0.625rem 0', fontSize: '0.75rem', justifyContent: 'center' }}
+                    >
+                      {diff}
+                    </button>
+                  ))}
+                </div>
               </div>
+            </div>
 
-              <button type="submit" disabled={loading} className="btn btn-primary" style={{ width: '100%', padding: '1rem', justifyContent: 'center' }}>
-                {loading ? 'Generating roadmap...' : 'Initialize Protocol'} <ArrowRight size={18} />
+            <div className="form-group">
+              <label>Daily Allocation</label>
+              <input 
+                type="text" 
+                name="commitment" 
+                className="form-control" 
+                placeholder="e.g. 2 hours of deep focus"
+                value={formData.commitment}
+                onChange={handleChange}
+                required 
+              />
+            </div>
+
+            <div className="form-group">
+              <label>Strategic Context <span style={{ fontWeight: 400, opacity: 0.4 }}>(optional)</span></label>
+              <textarea 
+                name="motivation" 
+                className="form-control" 
+                placeholder="Provide context for the AI planner..."
+                value={formData.motivation}
+                onChange={handleChange}
+                style={{ minHeight: '120px', resize: 'vertical' }}
+              ></textarea>
+            </div>
+
+            <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>
+              <button 
+                type="submit" 
+                disabled={loading} 
+                className="btn btn-primary" 
+                style={{ flex: 1, height: '3.5rem', justifyContent: 'center', fontSize: '1rem' }}
+              >
+                {loading ? <Sparkles className="spinner" size={20} /> : 'Initialize Protocol'} 
+                {!loading && <ArrowRight size={20} />}
               </button>
-            </form>
-          </div>
+            </div>
+          </form>
+        </div>
+
+        <div style={{ marginTop: '2.5rem', textAlign: 'center' }}>
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
+            <Target size={14} /> AI architect will generate tasks based on these parameters.
+          </p>
         </div>
       </div>
     </div>

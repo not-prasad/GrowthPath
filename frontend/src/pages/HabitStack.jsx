@@ -13,7 +13,7 @@ function HabitStack() {
   const [habits, setHabits] = useState([]);
   const [trigger, setTrigger] = useState('');
   const [newHabit, setNewHabit] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const { token, logout } = useAuth();
@@ -22,26 +22,52 @@ function HabitStack() {
   const headers = { ...authHeaders(token), 'Content-Type': 'application/json' };
 
   useEffect(() => {
-    const goalId = localStorage.getItem('growthpath_goal_id');
-    if (!goalId) { navigate('/setup'); return; }
-    const init = async () => {
+    const fetchData = async () => {
       setLoading(true);
       try {
-        const [goalRes, habitsRes] = await Promise.all([
-          fetch(`${API_BASE}/goals/${goalId}`, { headers: { Authorization: `Bearer ${token}` } }),
-          fetch(`${API_BASE}/habits`, { headers: { Authorization: `Bearer ${token}` } }),
-        ]);
-        if (goalRes.status === 401 || habitsRes.status === 401) { logout(); navigate('/login'); return; }
-        if (goalRes.ok) setGoal((await safeJson(goalRes)) || null);
-        if (habitsRes.ok) setHabits((await safeJson(habitsRes)) || []);
-      } catch {
+        const h = authHeaders(token);
+        
+        // 1. Resolve Goal if missing or invalid
+        let goalId = localStorage.getItem('growthpath_goal_id');
+        
+        const goalsRes = await fetch(`${API_BASE}/goals`, { headers: h });
+        if (goalsRes.status === 401) { logout(); navigate('/login'); return; }
+        
+        const goalsPayload = await safeJson(goalsRes);
+        const goals = goalsPayload?.goals || [];
+        const active = goalsPayload?.active_goal_id;
+
+        // Self-Healing: Resolve goal from server if local is missing/invalid
+        let currentGoal = goals.find(g => String(g.id) === String(goalId));
+        if (!currentGoal) {
+            currentGoal = goals.find(g => String(g.id) === String(active)) || goals[0];
+            if (currentGoal) {
+                localStorage.setItem('growthpath_goal_id', String(currentGoal.id));
+                goalId = String(currentGoal.id);
+            }
+        }
+
+        if (!currentGoal) {
+          navigate('/setup');
+          return;
+        }
+        setGoal(currentGoal);
+
+        // 2. Fetch Habits for this goal
+        const habitsRes = await fetch(`${API_BASE}/habits`, { headers: h });
+        if (habitsRes.ok) {
+          const habitsData = await safeJson(habitsRes);
+          setHabits(habitsData || []);
+        }
+      } catch (err) {
+        console.error("HabitStack Load Error:", err);
         setError('Failed to load data.');
       } finally {
         setLoading(false);
       }
     };
-    init();
-  }, [token]);
+    fetchData();
+  }, [token, navigate, logout]);
 
   const handleAdd = async (e) => {
     e.preventDefault();
@@ -93,7 +119,6 @@ function HabitStack() {
           <p className="premium-subtitle">Connect new habits to your existing routine to make them stick.</p>
         </header>
 
-        {/* Formula Explainer */}
         <section className="premium-section" style={{
           background: 'var(--header-gradient)',
           borderRadius: '24px', padding: '2rem 2.5rem',
@@ -121,7 +146,6 @@ function HabitStack() {
         </section>
 
         <div className="premium-grid-two" style={{ gridTemplateColumns: 'minmax(0, 0.8fr) minmax(0, 1.2fr)' }}>
-          {/* Add Form */}
           <section className="premium-section" style={{ padding: '2rem' }}>
             <h3 className="premium-mini-title"><Plus size={18} className="text-secondary" /> New Habit Pair</h3>
             <form onSubmit={handleAdd} style={{ marginTop: '1.5rem' }}>
@@ -174,7 +198,6 @@ function HabitStack() {
             </form>
           </section>
 
-          {/* Habit Stack List */}
           <section className="premium-section" style={{ padding: '2rem' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
               <h3 className="premium-mini-title"><Activity size={18} className="text-secondary" /> Active Stacks</h3>

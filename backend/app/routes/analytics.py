@@ -8,6 +8,7 @@ from ..database import query_all
 from ..services.analytics_engine import (
     compute_boxplot,
     compute_completion_by_category,
+    compute_full_analysis,
     compute_line_chart,
     compute_scatter_focus_vs_score,
     compute_scatter_friction_vs_score,
@@ -176,4 +177,15 @@ def viz_scatter_friction():
     goal_id = _resolve_goal_id(user_id, request.args.get("goal_id"))
     logs = _load_logs(user_id, goal_id)
     return jsonify({"goal_id": goal_id, "scatter": interpret_scatter(compute_scatter_friction_vs_score(logs), kind="friction")})
+@bp.get("/analytics/summary")
+@jwt_required()
+def viz_summary():
+    user_id = int(get_jwt_identity())
+    goal_id = _resolve_goal_id(user_id, request.args.get("goal_id"))
+    logs = _load_logs(user_id, goal_id)
+    tasks = _load_tasks(user_id, goal_id)
+    return jsonify({
+        "goal_id": goal_id, 
+        "summary": compute_full_analysis(logs, tasks)
+    })
 

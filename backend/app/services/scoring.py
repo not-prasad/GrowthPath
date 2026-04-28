@@ -1,5 +1,4 @@
-from __future__ import annotations
-
+import math
 from dataclasses import dataclass
 
 
@@ -20,7 +19,7 @@ class ScoreInputs:
 
 def compute_performance_score(inp: ScoreInputs) -> float:
     """
-    Forgiving baseline scoring: 40..100.
+    Balanced performance scoring: 0..100.
     Deterministic, no DB access, rounded to 2 decimals.
     """
     # Normalize inputs
@@ -33,43 +32,59 @@ def compute_performance_score(inp: ScoreInputs) -> float:
     friction = max(int(inp.friction_count or 0), 0)
 
     # Weighted components (0..1 each)
-    primary_score = 1.0 if bool(inp.primary_done) else 0.5  # forgiving baseline
-    support_score = (0.8 + 0.2 * (support_done / support_total)) if support_total > 0 else 0.8
-    optimize_score = (0.8 + 0.2 * (optimize_done / optimize_total)) if optimize_total > 0 else 0.8
+    # Primary is now CRITICAL. If not done, score is capped.
+    primary_score = 1.0 if bool(inp.primary_done) else 0.2 
+    
+    support_score = (support_done / support_total) if support_total > 0 else 1.0
+    optimize_score = (optimize_done / optimize_total) if optimize_total > 0 else 1.0
     focus_score = focus / 5.0
 
     weighted = (
-        primary_score * 0.50 +
-        support_score * 0.25 +
+        primary_score * 0.55 +
+        support_score * 0.20 +
         optimize_score * 0.15 +
         focus_score * 0.10
     )
 
-    base = (weighted * 60.0) + 40.0  # 40..100
+    # Base score 0..100
+    base = weighted * 100.0
 
-    # Friction modifier: bounded penalty
-    penalty = min(friction, 5) * 1.5  # max -7.5
-    final_score = _clamp(base - penalty, 40.0, 100.0)
+    # Friction modifier: non-linear penalty
+    # 1-2 frictions is normal, 3+ is a significant drag.
+    penalty = 0
+    if friction > 0:
+        penalty = min(friction * 3, 15) # Max -15 for high friction
+        
+    final_score = _clamp(base - penalty, 0.0, 100.0)
 
     return round(final_score, 2)
 
 
 def compute_xp(primary_done: bool, support_done: int, optimize_done: int) -> int:
     """
-    Simplified per-task XP reward system.
+    Balanced XP reward system.
+    Primary tasks are now the most valuable.
     """
     xp = 0
     if primary_done:
-        xp += 100
-    xp += (int(support_done or 0) * 70)
-    xp += (int(optimize_done or 0) * 50)
+        xp += 250 # Reward deep work heavily
+    xp += (int(support_done or 0) * 35) # Support tasks are secondary
+    xp += (int(optimize_done or 0) * 60) # Optimization/Growth is rewarded
     return xp
 
 
 def compute_level(total_xp: int) -> int:
     """
-    Stable integer level system: 1 + floor(total_xp / 1000).
+    Quadratic Leveling System: Level = floor(sqrt(XP / 100)) + 1
+    This ensures that early levels are fast, but high levels require 
+    significant consistent effort.
+    Example: 
+    - Lvl 2: 100 XP
+    - Lvl 5: 1600 XP
+    - Lvl 10: 8100 XP
+    - Lvl 50: 240,100 XP
     """
     xp = max(int(total_xp or 0), 0)
-    return 1 + (xp // 1000)
-
+    if xp == 0:
+        return 1
+    return int(math.sqrt(xp / 100)) + 1

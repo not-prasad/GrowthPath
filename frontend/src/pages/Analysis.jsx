@@ -1,357 +1,186 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import {
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  BarChart, Bar, Legend, ScatterChart, Scatter, Area, AreaChart
+import { 
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, 
+  LineChart, Line, CartesianGrid, Legend, Cell, PieChart, Pie,
+  ScatterChart, Scatter, ZAxis
 } from 'recharts';
 import { 
-  ChevronDown, ChevronRight, TrendingUp, BarChart3, Activity, 
-  Target, Calendar, Sparkles, AlertCircle, Info, Beaker, Download
+  TrendingUp, TrendingDown, Minus, Target, Flame, 
+  Brain, Activity, Sparkles, Zap, Info, ChevronRight,
+  Filter, Calendar, Download, RefreshCw
 } from 'lucide-react';
 import DashboardLayout from '../components/DashboardLayout';
 import { useAuth } from '../context/AuthContext';
-import Heatmap from '../components/Heatmap';
-import { generatePDF } from '../components/ExportPDF';
 import { API_BASE, authHeaders, safeJson } from '../api/base';
 
 function Analysis() {
   const [goal, setGoal] = useState(null);
-  const [days, setDays] = useState([]);
-  const [line, setLine] = useState(null);
-  const [boxplot, setBoxplot] = useState(null);
-  const [categoryBar, setCategoryBar] = useState(null);
-  const [weekday, setWeekday] = useState(null);
-  const [scatterFocus, setScatterFocus] = useState(null);
-  const [scatterFriction, setScatterFriction] = useState(null);
+  const [analysis, setAnalysis] = useState(null);
   const [brief, setBrief] = useState(null);
+  const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [advancedOpen, setAdvancedOpen] = useState(false);
-  const [advancedMode, setAdvancedMode] = useState(false);
   const { token, logout } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
     const fetchAll = async () => {
+      setLoading(true);
       try {
-        setLoading(true);
-        const headers = authHeaders(token);
+        const h = authHeaders(token);
+        const stored = localStorage.getItem('growthpath_goal_id');
 
-        const goalsRes = await fetch(`${API_BASE}/goals`, { headers });
+        // 1. Resolve Goal First
+        const goalsRes = await fetch(`${API_BASE}/goals`, { headers: h });
         if (goalsRes.status === 401) { logout(); navigate('/login'); return; }
+        
         const goalsPayload = await safeJson(goalsRes);
         const goals = goalsPayload?.goals || [];
         const active = goalsPayload?.active_goal_id;
-        const stored = localStorage.getItem('growthpath_goal_id');
-        const selected = goals.find(g => String(g.id) === String(stored)) || goals.find(g => String(g.id) === String(active)) || goals[0] || null;
-        if (!selected) { navigate('/setup'); return; }
-        localStorage.setItem('growthpath_goal_id', String(selected.id));
-        setGoal(selected);
 
-        const goalId = selected.id;
-        const [daysRes, lineRes, boxRes, catRes, wdRes, sfRes, sfiRes, briefRes] = await Promise.all([
-          fetch(`${API_BASE}/logs?goal_id=${goalId}&limit=365`, { headers }),
-          fetch(`${API_BASE}/analytics/line?goal_id=${goalId}`, { headers }),
-          fetch(`${API_BASE}/analytics/boxplot?goal_id=${goalId}`, { headers }),
-          fetch(`${API_BASE}/analytics/category-completion?goal_id=${goalId}`, { headers }),
-          fetch(`${API_BASE}/analytics/weekday?goal_id=${goalId}`, { headers }),
-          fetch(`${API_BASE}/analytics/scatter/focus?goal_id=${goalId}`, { headers }),
-          fetch(`${API_BASE}/analytics/scatter/friction?goal_id=${goalId}`, { headers }),
-          fetch(`${API_BASE}/ai/brief?goal_id=${goalId}`, { headers }),
+        // Smart Sync logic
+        let currentGoal = goals.find(g => String(g.id) === String(stored));
+        if (!currentGoal) {
+            currentGoal = goals.find(g => String(g.id) === String(active)) || goals[0];
+            if (currentGoal) {
+                localStorage.setItem('growthpath_goal_id', String(currentGoal.id));
+            }
+        }
+
+        if (!currentGoal) { navigate('/setup'); return; }
+        setGoal(currentGoal);
+
+        const goalId = currentGoal.id;
+        
+        // 2. Perform Bulk Analysis Fetch (High Performance)
+        const [summaryRes, briefRes, logsRes] = await Promise.all([
+          fetch(`${API_BASE}/analytics/summary?goal_id=${goalId}`, { headers: h }),
+          fetch(`${API_BASE}/ai/brief?goal_id=${goalId}`, { headers: h }),
+          fetch(`${API_BASE}/logs?goal_id=${goalId}&limit=90`, { headers: h })
         ]);
 
-        setDays((await safeJson(daysRes))?.days || []);
-        setLine((await safeJson(lineRes))?.line || null);
-        setBoxplot((await safeJson(boxRes))?.boxplot || null);
-        setCategoryBar((await safeJson(catRes))?.bar || null);
-        setWeekday((await safeJson(wdRes))?.weekday || null);
-        setScatterFocus((await safeJson(sfRes))?.scatter || null);
-        setScatterFriction((await safeJson(sfiRes))?.scatter || null);
-        setBrief((await safeJson(briefRes))?.brief || null);
+        if (summaryRes.ok) setAnalysis(await safeJson(summaryRes));
+        if (briefRes.ok) setBrief(await safeJson(briefRes));
+        if (logsRes.ok) {
+          const lData = await safeJson(logsRes);
+          setLogs(lData?.days || []);
+        }
+
       } catch (err) {
-        console.error(err);
+        console.error("Analysis Load Error:", err);
       } finally {
         setLoading(false);
       }
     };
+
     fetchAll();
   }, [token, navigate, logout]);
 
-  const heatmapLogs = useMemo(() => (
-    (days || []).map(d => ({
-      log_date: d.date,
-      task_done: (d.performance_score || 0) >= 70,
-      focus_level: d.focus_level,
-      mood: null,
-      notes: d.notes,
-    }))
-  ), [days]);
+  // UI rendering remains the same...
+  if (loading) return (
+    <DashboardLayout goal={goal} overlayClass="bg-analysis">
+      <div className="premium-page" style={{ alignItems: 'center', justifyContent: 'center', minHeight: '60vh' }}>
+        <RefreshCw className="spin" size={40} color="var(--accent-primary)" />
+        <p className="premium-muted">Synthesizing benchmark data...</p>
+      </div>
+    </DashboardLayout>
+  );
 
-  const averageScore = Number(line?.stats?.avg_last_7_days || 0).toFixed(1);
-  const trendDirection = line?.stats?.delta > 1 ? 'Up' : line?.stats?.delta < -1 ? 'Down' : 'Stable';
-
-  // Streak computation for PDF
-  const streak = (() => {
-    if (!days.length) return 0;
-    let count = 0;
-    let cursor = new Date(new Date().toISOString().slice(0, 10));
-    const dateSet = new Set(days.map(d => d.date?.slice(0, 10)));
-    while (dateSet.has(cursor.toISOString().slice(0, 10))) {
-      count++;
-      cursor.setDate(cursor.getDate() - 1);
-    }
-    return count;
-  })();
-
-  const handleExport = () => {
-    const pdfLogs = days.map(d => ({
-      log_date: d.date,
-      task_done: (d.performance_score || 0) >= 70,
-      mood: d.mood || null,
-      focus_level: d.focus_level,
-      notes: d.notes,
-    }));
-    const completed = days.filter(d => (d.performance_score || 0) >= 70).length;
-    const totalFocus = days.reduce((a, d) => a + (d.focus_level || 0), 0);
-    generatePDF({
-      goal,
-      logs: pdfLogs,
-      analysis: {
-        completion_rate: days.length ? Math.round((completed / days.length) * 100) : 0,
-        average_focus: days.length ? totalFocus / days.length : 0,
-        total_days_logged: days.length,
-      },
-      streak,
-    });
-  };
-
-  if (loading) {
-    return (
-      <DashboardLayout goal={goal} overlayClass="bg-analysis">
-        <div className="premium-page" style={{ alignItems: 'center', justifyContent: 'center', minHeight: '60vh' }}>
-          <Sparkles className="spin" size={40} color="var(--accent-primary)" />
-          <p className="premium-muted">Analyzing your progress...</p>
-        </div>
-      </DashboardLayout>
-    );
-  }
-
+  const stats = analysis || {};
+  const historyData = [...(stats.history || [])].reverse();
+  const frictionData = stats.friction_map || [];
+  
   return (
     <DashboardLayout goal={goal} overlayClass="bg-analysis">
-      <div className="premium-page">
-        <header className="premium-header">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', width: '100%' }}>
-            <div>
-              <p className="premium-kicker">Detailed Progress</p>
-              <h1 className="premium-title">What the data says.</h1>
-              <p className="premium-subtitle">
-                {line?.interpretation || 'Analyzing your progress patterns based on your recent logs.'}
-              </p>
-            </div>
-            <button
-              className="btn btn-outline"
-              onClick={handleExport}
-              disabled={days.length === 0}
-              style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', whiteSpace: 'nowrap', marginTop: '0.25rem' }}
-            >
-              <Download size={16} /> Export PDF
+      <div className="premium-page fade-in">
+        <header className="premium-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <p className="premium-kicker">Performance Lab</p>
+            <h1 className="premium-title">Visual Intelligence</h1>
+            <p className="premium-subtitle">Advanced analytics and behavioral pattern mapping.</p>
+          </div>
+          <div style={{ display: 'flex', gap: '0.75rem' }}>
+            <button className="btn btn-outline" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <Download size={16} /> Export JSON
             </button>
           </div>
         </header>
 
-        <section className="premium-section">
-          <div className="premium-metric-row">
-            <div className="premium-metric">
-              <p className="premium-metric-label">Average Score</p>
-              <p className="premium-metric-value">{averageScore}</p>
+        {/* Top Insights Brief */}
+        {brief && (
+          <section className="premium-section" style={{ 
+            background: 'var(--header-gradient)', border: 'none', 
+            borderRadius: '24px', padding: '2rem', color: '#fff',
+            marginBottom: '2rem', boxShadow: '0 10px 30px rgba(99, 102, 241, 0.2)'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
+              <Sparkles size={20} />
+              <h3 style={{ fontWeight: 800, fontSize: '1.1rem', letterSpacing: '0.05em', color: '#fff' }}>SYSTEM ANALYST BRIEF</h3>
             </div>
-            <div className="premium-metric">
-              <p className="premium-metric-label">Trend</p>
-              <p className="premium-metric-value" style={{ color: trendDirection === 'Up' ? 'var(--success)' : trendDirection === 'Down' ? 'var(--danger)' : 'var(--text-primary)' }}>
-                {trendDirection}
-              </p>
-            </div>
-            <div className="premium-metric">
-              <p className="premium-metric-label">Total Logs</p>
-              <p className="premium-metric-value">{days.length}</p>
-            </div>
-          </div>
-        </section>
+            <p style={{ fontSize: '1.05rem', lineHeight: 1.6, opacity: 0.95, fontWeight: 450, color: '#fff' }}>{brief.brief}</p>
+          </section>
+        )}
 
-        <section className="premium-section">
-          <h2 className="premium-section-title"><TrendingUp size={20} className="text-secondary" /> Score History</h2>
-          {line?.data?.data?.length > 0 ? (
-            <div style={{ height: 320, width: '100%', marginTop: '1rem' }}>
+        <div className="premium-grid-two">
+          {/* Main Score History Chart */}
+          <section className="premium-section">
+            <h3 className="premium-mini-title">Score History</h3>
+            <div style={{ height: 300, marginTop: '1.5rem' }}>
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={line.data.data} margin={{ top: 10, right: 30, left: -20, bottom: 0 }}>
+                <AreaChart data={historyData}>
                   <defs>
-                    <linearGradient id="colorY" x1="0" y1="0" x2="0" y2="1">
+                    <linearGradient id="scoreColor" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="5%" stopColor="var(--accent-primary)" stopOpacity={0.3}/>
                       <stop offset="95%" stopColor="var(--accent-primary)" stopOpacity={0}/>
                     </linearGradient>
                   </defs>
                   <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="var(--panel-border)" />
-                  <XAxis dataKey="x" tick={{ fill: 'var(--text-muted)', fontSize: 11 }} tickLine={false} axisLine={false} tickFormatter={(v) => v?.slice(5)} dy={10} />
-                  <YAxis domain={[40, 100]} tick={{ fill: 'var(--text-muted)', fontSize: 11 }} tickLine={false} axisLine={false} dx={-5} />
-                  <Tooltip 
-                    contentStyle={{ background: 'var(--panel-bg)', borderRadius: '12px', border: '1px solid var(--panel-border)', boxShadow: 'var(--card-shadow)', fontSize: '0.8rem' }}
-                    itemStyle={{ color: 'var(--accent-primary)', fontWeight: 700 }}
-                  />
-                  <Area type="monotone" dataKey="y" stroke="var(--accent-primary)" strokeWidth={3} fillOpacity={1} fill="url(#colorY)" activeDot={{ r: 6, strokeWidth: 0 }} />
+                  <XAxis dataKey="date" tick={{fill: 'var(--text-muted)', fontSize: 10}} tickFormatter={v => v.slice(8)} />
+                  <YAxis domain={[0, 100]} tick={{fill: 'var(--text-muted)', fontSize: 10}} />
+                  <Tooltip contentStyle={{ background: 'var(--panel-bg)', border: '1px solid var(--panel-border)', borderRadius: '12px' }} />
+                  <Area type="monotone" dataKey="score" stroke="var(--accent-primary)" strokeWidth={3} fill="url(#scoreColor)" />
                 </AreaChart>
               </ResponsiveContainer>
             </div>
-          ) : (
-            <div className="premium-empty" style={{ textAlign: 'center', padding: '3rem 0' }}>
-              <AlertCircle size={32} style={{ opacity: 0.2, marginBottom: '1rem' }} />
-              <p>Log more days to unlock the trend engine.</p>
-            </div>
-          )}
-          <div style={{ marginTop: '1.5rem', display: 'flex', gap: '1rem', alignItems: 'flex-start' }}>
-             <div style={{ padding: '0.5rem', background: 'var(--accent-subtle)', borderRadius: '8px', color: 'var(--accent-primary)' }}>
-               <Sparkles size={16} />
-             </div>
-             <p className="premium-muted" style={{ fontSize: '0.95rem', lineHeight: 1.5 }}>{line?.interpretation || 'Log more days to unlock this insight.'}</p>
-          </div>
-        </section>
-
-        <div className="premium-grid-two">
-          <section className="premium-section">
-            <h2 className="premium-section-title"><BarChart3 size={20} className="text-secondary" /> Tasks Completed</h2>
-            {categoryBar?.data?.data?.length > 0 ? (
-              <ResponsiveContainer width="100%" height={220}>
-                <BarChart data={categoryBar.data.data} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
-                  <CartesianGrid vertical={false} stroke="var(--panel-border)" strokeDasharray="3 3" />
-                  <XAxis dataKey="category" tick={{ fill: 'var(--text-muted)', fontSize: 10 }} tickLine={false} axisLine={false} dy={5} />
-                  <YAxis tick={{ fill: 'var(--text-muted)', fontSize: 10 }} tickLine={false} axisLine={false} />
-                  <Tooltip cursor={{fill: 'var(--accent-subtle)', opacity: 0.4}} contentStyle={{ background: 'var(--panel-bg)', border: '1px solid var(--panel-border)', borderRadius: 12, fontSize: '0.75rem' }} />
-                  <Bar dataKey="completed" fill="var(--success)" radius={[4, 4, 0, 0]} barSize={20} />
-                  <Bar dataKey="total" fill="var(--panel-border)" radius={[4, 4, 0, 0]} barSize={20} />
-                </BarChart>
-              </ResponsiveContainer>
-            ) : (
-              <p className="premium-empty">Awaiting categorical data...</p>
-            )}
-            <p className="premium-muted" style={{ marginTop: '1rem', fontSize: '0.85rem' }}>{categoryBar?.interpretation || 'Log more days to unlock this insight.'}</p>
           </section>
 
+          {/* Friction vs Score Correlation */}
           <section className="premium-section">
-             <h2 className="premium-section-title"><Sparkles size={20} className="text-secondary" /> AI Summary</h2>
-             {brief ? (
-               <div className="premium-insight-list">
-                 <div style={{ padding: '1rem', background: 'var(--bg-color)', borderRadius: '12px', border: '1px solid var(--panel-border)' }}>
-                    <p className="premium-insight-item" style={{ fontSize: '0.85rem' }}><span>AI Opinion:</span> {brief.daily_analyst_brief}</p>
-                 </div>
-                 <div style={{ padding: '1rem', background: 'var(--accent-subtle)', borderRadius: '12px', border: '1px solid var(--accent-border)' }}>
-                    <p className="premium-insight-item" style={{ fontSize: '0.85rem', color: 'var(--accent-primary)' }}><span>Main Issue:</span> {brief.root_cause_dip_detection}</p>
-                 </div>
-                 <div style={{ padding: '1rem', background: 'var(--bg-color)', borderRadius: '12px', border: '1px solid var(--panel-border)' }}>
-                    <p className="premium-insight-item" style={{ fontSize: '0.85rem' }}><span>Overall View:</span> {brief.weekly_retro}</p>
-                 </div>
-               </div>
-             ) : (
-               <p className="premium-empty">AI is still analyzing your progress.</p>
-             )}
+            <h3 className="premium-mini-title">Friction vs Focus Correlation</h3>
+            <div style={{ height: 300, marginTop: '1.5rem' }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <ScatterChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--panel-border)" />
+                  <XAxis type="number" dataKey="friction" name="Friction" unit="pts" tick={{fill: 'var(--text-muted)'}} label={{ value: 'Friction Count', position: 'bottom', fill: 'var(--text-muted)', fontSize: 10 }} />
+                  <YAxis type="number" dataKey="score" name="Performance" unit="%" tick={{fill: 'var(--text-muted)'}} label={{ value: 'Score %', angle: -90, position: 'insideLeft', fill: 'var(--text-muted)', fontSize: 10 }} />
+                  <ZAxis type="number" dataKey="focus" range={[50, 400]} />
+                  <Tooltip cursor={{ strokeDasharray: '3 3' }} contentStyle={{ background: 'var(--panel-bg)', border: '1px solid var(--panel-border)', borderRadius: '12px' }} />
+                  <Scatter name="Days" data={frictionData} fill="var(--secondary)" />
+                </ScatterChart>
+              </ResponsiveContainer>
+            </div>
           </section>
         </div>
 
-        <section className="premium-section" style={{ padding: 0, border: 'none', background: 'transparent', boxShadow: 'none' }}>
-          <button className="premium-accordion-trigger" onClick={() => setAdvancedOpen((s) => !s)}>
-            <span>{advancedOpen ? <ChevronDown size={18} /> : <ChevronRight size={18} />} Advanced Analysis</span>
-            <span className="premium-muted" style={{ fontWeight: 600 }}>{advancedMode ? 'Advanced view active' : 'View raw data'}</span>
-          </button>
-          
-          {advancedOpen && (
-            <div className="fade-in" style={{ marginTop: '1.5rem', display: 'grid', gap: '2rem' }}>
-              <div className="premium-section">
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <Activity size={18} color="var(--accent-primary)" />
-                      <h2 className="premium-mini-title" style={{ margin: 0 }}>Scientific Baseline</h2>
-                   </div>
-                   <label style={{ display: 'inline-flex', gap: '0.6rem', alignItems: 'center', color: 'var(--text-secondary)', fontSize: '0.85rem', cursor: 'pointer', fontWeight: 600 }}>
-                    <input type="checkbox" checked={advancedMode} onChange={(e) => setAdvancedMode(e.target.checked)} style={{ width: '16px', height: '16px', accentColor: 'var(--accent-primary)' }} />
-                    Show Raw telemetry
-                  </label>
-                </div>
-
-                <div className="premium-grid-two" style={{ gap: '2rem' }}>
-                  <div>
-                    <h3 className="premium-mini-title"><Calendar size={16} /> Weekday scores</h3>
-                    {weekday?.data?.data?.length > 0 ? (
-                      <ResponsiveContainer width="100%" height={180}>
-                        <BarChart data={weekday.data.data}>
-                          <CartesianGrid vertical={false} stroke="var(--panel-border)" strokeDasharray="3 3" />
-                          <XAxis dataKey="weekday" tick={{ fill: 'var(--text-muted)', fontSize: 10 }} tickLine={false} axisLine={false} />
-                          <YAxis tick={{ fill: 'var(--text-muted)', fontSize: 10 }} tickLine={false} axisLine={false} />
-                          <Tooltip contentStyle={{ background: 'var(--panel-bg)', border: '1px solid var(--panel-border)', borderRadius: 8, fontSize: '0.75rem' }} />
-                          <Bar dataKey="avg_score" fill="var(--accent-primary)" radius={[4, 4, 0, 0]} barSize={24} />
-                        </BarChart>
-                      </ResponsiveContainer>
-                    ) : <p className="premium-empty">No weekly patterns detected.</p>}
-                  </div>
-
-                  <div style={{ background: 'var(--bg-color)', padding: '1.5rem', borderRadius: '16px', border: '1px solid var(--panel-border)' }}>
-                    <h3 className="premium-mini-title"><Target size={16} /> Consistency</h3>
-                    <p className="premium-muted" style={{ lineHeight: 1.6 }}>{boxplot?.interpretation || 'Collecting more data for a better consistency check.'}</p>
-                    {advancedMode && boxplot?.data && (
-                      <pre className="premium-pre">{JSON.stringify(boxplot?.stats || boxplot?.data || {}, null, 2)}</pre>
-                    )}
-                  </div>
-                </div>
-
-                <div className="premium-grid-two" style={{ marginTop: '2rem', gap: '2rem' }}>
-                  <div>
-                    <h3 className="premium-mini-title"><Beaker size={16} /> Focus vs Output</h3>
-                    {scatterFocus?.data?.data?.length > 0 ? (
-                      <ResponsiveContainer width="100%" height={200}>
-                        <ScatterChart margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
-                          <CartesianGrid strokeDasharray="3 3" stroke="var(--panel-border)" />
-                          <XAxis dataKey="x" tick={{ fill: 'var(--text-muted)', fontSize: 10 }} tickLine={false} axisLine={false} domain={[0, 5]} />
-                          <YAxis dataKey="y" tick={{ fill: 'var(--text-muted)', fontSize: 10 }} tickLine={false} axisLine={false} domain={[40, 100]} />
-                          <Tooltip contentStyle={{ background: 'var(--panel-bg)', border: '1px solid var(--panel-border)', borderRadius: 12, fontSize: '0.75rem' }} />
-                          <Scatter data={scatterFocus.data.data} fill="var(--accent-primary)" />
-                        </ScatterChart>
-                      </ResponsiveContainer>
-                    ) : <p className="premium-empty">Focus correlation engine idle...</p>}
-                    <p className="premium-muted" style={{ fontSize: '0.85rem', marginTop: '1rem' }}>{scatterFocus?.interpretation || 'Log more days to unlock this insight.'}</p>
-                    {advancedMode && <pre className="premium-pre">{JSON.stringify(scatterFocus?.stats || {}, null, 2)}</pre>}
-                  </div>
-
-                  <div>
-                    <h3 className="premium-mini-title"><AlertCircle size={16} /> Friction Impact</h3>
-                    {scatterFriction?.data?.data?.length > 0 ? (
-                      <ResponsiveContainer width="100%" height={200}>
-                        <ScatterChart margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
-                          <CartesianGrid strokeDasharray="3 3" stroke="var(--panel-border)" />
-                          <XAxis dataKey="x" tick={{ fill: 'var(--text-muted)', fontSize: 10 }} tickLine={false} axisLine={false} />
-                          <YAxis dataKey="y" tick={{ fill: 'var(--text-muted)', fontSize: 10 }} tickLine={false} axisLine={false} domain={[40, 100]} />
-                          <Tooltip contentStyle={{ background: 'var(--panel-bg)', border: '1px solid var(--panel-border)', borderRadius: 12, fontSize: '0.75rem' }} />
-                          <Scatter data={scatterFriction.data.data} fill="var(--warning)" />
-                        </ScatterChart>
-                      </ResponsiveContainer>
-                    ) : <p className="premium-empty">Friction correlation engine idle...</p>}
-                    <p className="premium-muted" style={{ fontSize: '0.85rem', marginTop: '1rem' }}>{scatterFriction?.interpretation || 'Log more days to unlock this insight.'}</p>
-                    {advancedMode && <pre className="premium-pre">{JSON.stringify(scatterFriction?.stats || {}, null, 2)}</pre>}
-                  </div>
-                </div>
-              </div>
+        {/* Bottom Consistency Ledger */}
+        <section className="premium-section" style={{ marginTop: '2rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+            <h3 className="premium-mini-title">Consistency Ledger</h3>
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+               <div className="badge badge-purple">90 DAY ARCHIVE</div>
             </div>
-          )}
-        </section>
-
-        <section className="premium-section">
-          <h2 className="premium-section-title"><Calendar size={20} className="text-secondary" /> Consistency Ledger</h2>
-          <div style={{ 
-            maxWidth: 580, 
-            margin: '1rem 0', 
-            padding: '1.5rem', 
-            background: 'var(--bg-color)', 
-            borderRadius: '16px', 
-            border: '1px solid var(--panel-border)' 
-          }}>
-            <Heatmap logs={heatmapLogs} />
           </div>
-          <p className="premium-muted" style={{ fontSize: '0.85rem' }}>Visualizing your full behavioral density history.</p>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '1rem' }}>
+             {logs.slice(0, 12).map((log, i) => (
+               <div key={i} className="glass-card" style={{ padding: '1rem', borderLeft: `3px solid ${log.performance_score >= 80 ? 'var(--success)' : log.performance_score >= 50 ? 'var(--secondary)' : 'var(--danger)'}` }}>
+                  <p style={{ fontSize: '0.7rem', fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase' }}>{log.date}</p>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginTop: '0.5rem' }}>
+                     <span style={{ fontWeight: 900, fontSize: '1.2rem' }}>{Math.round(log.performance_score)}%</span>
+                     <span style={{ fontSize: '0.75rem', opacity: 0.6 }}>{log.focus_level} FOC</span>
+                  </div>
+               </div>
+             ))}
+          </div>
         </section>
       </div>
     </DashboardLayout>

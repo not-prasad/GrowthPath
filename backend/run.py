@@ -16,6 +16,4 @@ app = create_app()
 
 
 if __name__ == "__main__":
-    # Use backend/config.py Config.DEBUG via Flask envs; default binds to localhost.
-    app.run(port=5000, debug=bool(getattr(Config, "DEBUG", False)))
-
+    app.run(host="0.0.0.0", port=5000, debug=bool(getattr(Config, "DEBUG", False)))
