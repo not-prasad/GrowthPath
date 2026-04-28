@@ -14,6 +14,8 @@ import Login from './pages/Login';
 import Register from './pages/Register';
 import Goals from './pages/Goals';
 import Mastery from './pages/Mastery';
+import WeeklyReview from './pages/WeeklyReview';
+import DailyTasks from './pages/DailyTasks';
 
 const PrivateRoute = ({ children }) => {
   const { token } = useAuth();
@@ -62,6 +64,8 @@ function App() {
             <Route path="/habits" element={<PrivateRoute><HabitStack /></PrivateRoute>} />
             <Route path="/goals" element={<PrivateRoute><Goals /></PrivateRoute>} />
             <Route path="/mastery" element={<PrivateRoute><Mastery /></PrivateRoute>} />
+            <Route path="/weekly" element={<PrivateRoute><WeeklyReview /></PrivateRoute>} />
+            <Route path="/tasks" element={<PrivateRoute><DailyTasks /></PrivateRoute>} />
           </Routes>
         </div>
       </BrowserRouter>
