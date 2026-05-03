@@ -23,7 +23,11 @@ def create_app() -> Flask:
     # Extensions
     JWTManager(app)
     cors_origins = getattr(Config, "CORS_ORIGIN", "*")
-    CORS(app, resources={r"/api/*": {"origins": cors_origins}})
+    CORS(app, resources={r"/api/*": {
+        "origins": cors_origins,
+        "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        "allow_headers": ["Content-Type", "Authorization"]
+    }})
 
     # DB bootstrap (v2 only)
     init_db()
