@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Users, Plus, Copy, Check, Flame, LogIn } from 'lucide-react';
 import DashboardLayout from '../components/DashboardLayout';
 import { useAuth } from '../context/AuthContext';
+import { API_BASE, authHeaders } from '../api/base';
 
 function MemberCard({ member }) {
   const initial = member.email ? member.email[0].toUpperCase() : '?';
@@ -78,9 +79,13 @@ function Circles() {
   const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
 
   const fetchCircles = async () => {
-    const res = await fetch('http://localhost:5000/api/circles', { headers: { Authorization: `Bearer ${token}` } });
-    if (res.status === 401) { logout(); navigate('/login'); return; }
-    if (res.ok) setCircles(await res.json());
+    try {
+      const res = await fetch(`${API_BASE}/circles`, { headers: authHeaders(token) });
+      if (res.status === 401) { logout(); navigate('/login'); return; }
+      if (res.ok) setCircles(await res.json());
+    } catch (err) {
+      console.warn('Circles fetch error:', err);
+    }
   };
 
   useEffect(() => {
@@ -89,11 +94,20 @@ function Circles() {
     const init = async () => {
       setLoading(true);
       try {
-        const goalRes = await fetch(`http://localhost:5000/api/goals/${goalId}`, { headers: { Authorization: `Bearer ${token}` } });
-        if (goalRes.status === 401) { logout(); navigate('/login'); return; }
-        if (goalRes.ok) setGoal(await goalRes.json());
+        const headers = authHeaders(token);
+        // GET /api/goals/:id doesn't exist — fetch list and find by stored ID
+        const goalsRes = await fetch(`${API_BASE}/goals`, { headers });
+        if (goalsRes.status === 401) { logout(); navigate('/login'); return; }
+        if (goalsRes.ok) {
+          const payload = await goalsRes.json();
+          const goals = payload?.goals || [];
+          const found = goals.find(g => String(g.id) === String(goalId)) || goals[0] || null;
+          if (found) setGoal(found);
+        }
         await fetchCircles();
-      } catch { /* ignore */ } finally {
+      } catch (err) {
+        console.error('Circles init error:', err);
+      } finally {
         setLoading(false);
       }
     };
@@ -105,8 +119,8 @@ function Circles() {
     if (!circleName.trim()) return;
     setCreating(true); setError(''); setSuccess('');
     try {
-      const res = await fetch('http://localhost:5000/api/circles', {
-        method: 'POST', headers,
+      const res = await fetch(`${API_BASE}/circles`, {
+        method: 'POST', headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: circleName }),
       });
       const data = await res.json();
@@ -126,8 +140,8 @@ function Circles() {
     if (!joinCode.trim()) return;
     setJoining(true); setError(''); setSuccess('');
     try {
-      const res = await fetch('http://localhost:5000/api/circles/join', {
-        method: 'POST', headers,
+      const res = await fetch(`${API_BASE}/circles/join`, {
+        method: 'POST', headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
         body: JSON.stringify({ invite_code: joinCode }),
       });
       const data = await res.json();

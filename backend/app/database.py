@@ -7,7 +7,7 @@ from backend.config import Config
 
 
 def _connect() -> sqlite3.Connection:
-    conn = sqlite3.connect(getattr(Config, "DB_FILE", "growthpath_v2.db"))
+    conn = sqlite3.connect(getattr(Config, "DB_FILE", os.path.join(os.path.dirname(os.path.dirname(__file__)), "growthpath.db")))
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
     conn.execute("PRAGMA journal_mode = WAL")
@@ -29,7 +29,7 @@ def get_conn() -> Iterable[sqlite3.Connection]:
 
 
 def init_db() -> None:
-    db_path = os.path.abspath(getattr(Config, "DB_FILE", "growthpath_v2.db"))
+    db_path = os.path.abspath(getattr(Config, "DB_FILE", os.path.join(os.path.dirname(os.path.dirname(__file__)), "growthpath.db")))
     os.makedirs(os.path.dirname(db_path), exist_ok=True)
     # Connection will create file if missing.
     with get_conn():

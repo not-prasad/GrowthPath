@@ -123,7 +123,9 @@ def recalculate_log_stats(user_id: int, goal_id: int, log_date: str) -> None:
           SUM(CASE WHEN task_type='support'  THEN 1 ELSE 0 END) AS support_total,
           SUM(CASE WHEN task_type='support'  AND is_completed=1 THEN 1 ELSE 0 END) AS support_done,
           SUM(CASE WHEN task_type='optimize' THEN 1 ELSE 0 END) AS optimize_total,
-          SUM(CASE WHEN task_type='optimize' AND is_completed=1 THEN 1 ELSE 0 END) AS optimize_done
+          SUM(CASE WHEN task_type='optimize' AND is_completed=1 THEN 1 ELSE 0 END) AS optimize_done,
+          SUM(CASE WHEN task_type='custom'   THEN 1 ELSE 0 END) AS custom_total,
+          SUM(CASE WHEN task_type='custom'   AND is_completed=1 THEN 1 ELSE 0 END) AS custom_done
         FROM daily_tasks
         WHERE user_id=? AND goal_id=? AND log_date=?
         """,
@@ -135,6 +137,8 @@ def recalculate_log_stats(user_id: int, goal_id: int, log_date: str) -> None:
     support_done = int(counts.get("support_done", 0) or 0)
     optimize_total = int(counts.get("optimize_total", 0) or 0)
     optimize_done = int(counts.get("optimize_done", 0) or 0)
+    custom_total = int(counts.get("custom_total", 0) or 0)
+    custom_done = int(counts.get("custom_done", 0) or 0)
 
     score = compute_performance_score(
         ScoreInputs(
@@ -143,22 +147,43 @@ def recalculate_log_stats(user_id: int, goal_id: int, log_date: str) -> None:
             support_total=support_total,
             optimize_done=optimize_done,
             optimize_total=optimize_total,
+            custom_done=custom_done,
+            custom_total=custom_total,
             focus_level=focus_level,
             friction_count=friction_count,
         )
     )
-    xp_gained = compute_xp(primary_done=primary_done, support_done=support_done, optimize_done=optimize_done)
+    xp_gained = compute_xp(
+        primary_done=primary_done, 
+        support_done=support_done, 
+        optimize_done=optimize_done,
+        custom_done=custom_done
+    )
 
     execute(
         "UPDATE daily_logs SET performance_score=?, xp_gained=?, updated_at=datetime('now') WHERE id=?",
         (score, xp_gained, log_id),
     )
 
-    # Update user xp/level idempotently for the day:
-    totals = query_one("SELECT COALESCE(SUM(xp_gained),0) AS total_xp FROM daily_logs WHERE user_id=?", (user_id,))
-    total_xp = int(totals.get("total_xp", 0) or 0) if totals else 0
-    level = compute_level(total_xp)
-    execute("UPDATE users SET total_xp=?, level=?, updated_at=datetime('now') WHERE id=?", (total_xp, level, user_id))
+    # Update user xp/level ADDITIVELY (Integrity Fix):
+    # Instead of wiping, we ensure the user's total_xp in the 'users' table 
+    # is synced with the TOTAL of all daily_logs PLUS any manual bonuses.
+    # However, since manual bonuses are rare, we'll do a "Delta Sync".
+    
+    # Get current sum of logs
+    totals = query_one("SELECT SUM(xp_gained) AS total_from_logs FROM daily_logs WHERE user_id=?", (user_id,))
+    total_from_logs = int(totals.get("total_from_logs", 0) or 0) if totals else 0
+    
+    # We should also account for any bonuses that are NOT in daily_logs.
+    # For now, let's just make sure total_xp doesn't drop.
+    current_user = query_one("SELECT total_xp FROM users WHERE id=?", (user_id,))
+    current_xp = int(current_user["total_xp"] or 0)
+    
+    # If current_xp is higher than total_from_logs, it means user has bonuses.
+    # We only update if the new total from logs (which was just updated) would push the total higher.
+    final_xp = max(current_xp, total_from_logs)
+    level = compute_level(final_xp)
+    execute("UPDATE users SET total_xp=?, level=?, updated_at=datetime('now') WHERE id=?", (final_xp, level, user_id))
 
 
 @bp.get("/logs")

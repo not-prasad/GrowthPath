@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, ArrowRight, CheckCircle2, Zap, X, TrendingUp, TrendingDown, Minus, CheckCircle, Circle, Sparkles } from 'lucide-react';
+import { ArrowLeft, ArrowRight, CheckCircle2, Zap, X, TrendingUp, TrendingDown, Minus, CheckCircle, Circle, Sparkles, Trash2 } from 'lucide-react';
 import DashboardLayout from '../components/DashboardLayout';
 import { useAuth } from '../context/AuthContext';
 import { API_BASE, authHeaders, safeJson } from '../api/base';
@@ -65,7 +65,16 @@ export default function PerformanceInput() {
         const daysRes = await fetch(`${API_BASE}/logs?goal_id=${selected.id}&from=${today}&to=${today}&limit=1`, { headers });
         const payload = await safeJson(daysRes);
         const day = payload?.days?.[0];
+        
         setTodayTasks(day?.tasks || []);
+        
+        // Fix: Load existing metrics so we don't reset to defaults on re-save
+        if (day) {
+          if (day.energy_state) setEnergyState(day.energy_state);
+          if (day.focus_level) setFocusLevel(Number(day.focus_level));
+          if (day.notes) setNotes(day.notes);
+          // Note: friction is more complex as it's an array in UI, we'll keep it simple for now
+        }
       } catch (e) {
         console.error(e);
       } finally {
@@ -176,22 +185,41 @@ export default function PerformanceInput() {
 
   const toggleTask = async (taskId) => {
     if (!taskId) return;
+    // OPTIMISTIC UPDATE
+    const original = [...todayTasks];
+    setTodayTasks(prev => prev.map(t => t.id === taskId ? { ...t, is_completed: !t.is_completed } : t));
+
     try {
       const res = await fetch(`${API_BASE}/tasks/${taskId}/toggle`, {
         method: 'PUT',
         headers: authHeaders(token),
       });
-        const data = await safeJson(res);
-        if (data.total_xp !== undefined) {
-          updateUser({ total_xp: data.total_xp, level: data.level });
-        }
-        
-        const goalId = localStorage.getItem('growthpath_goal_id');
-        const today = new Date().toISOString().slice(0, 10);
-        const todayRes = await fetch(`${API_BASE}/logs?goal_id=${goalId}&from=${today}&to=${today}&limit=1`, { headers: authHeaders(token) });
-        const payload = await safeJson(todayRes);
-        const day = payload?.days?.[0];
-        setTodayTasks(day?.tasks || []);
+      const data = await safeJson(res);
+      if (data.total_xp !== undefined) {
+        updateUser({ total_xp: data.total_xp, level: data.level });
+      }
+      
+      const goalId = localStorage.getItem('growthpath_goal_id');
+      const today = new Date().toISOString().slice(0, 10);
+      const todayRes = await fetch(`${API_BASE}/logs?goal_id=${goalId}&from=${today}&to=${today}&limit=1`, { headers: authHeaders(token) });
+      const payload = await safeJson(todayRes);
+      setTodayTasks(payload?.days?.[0]?.tasks || []);
+    } catch (e) {
+      console.error(e);
+      setTodayTasks(original);
+    }
+  };
+
+  const deleteTask = async (taskId) => {
+    if (!window.confirm('Delete this task?')) return;
+    try {
+      const res = await fetch(`${API_BASE}/tasks/${taskId}`, {
+        method: 'DELETE',
+        headers: authHeaders(token),
+      });
+      if (res.ok) {
+        setTodayTasks(prev => prev.filter(t => t.id !== taskId));
+      }
     } catch (e) {
       console.error(e);
     }
@@ -245,6 +273,7 @@ export default function PerformanceInput() {
               {[
                 { label: 'XP Earned', value: `+${result?.log?.xp_gained || 0}`, color: 'var(--accent-primary)' },
                 { label: 'Progress Trend', value: trend, color: trendColor },
+                { label: 'Focus Level', value: `${result?.log?.focus_level || 0}/5`, color: 'var(--accent-primary)' },
                 { label: 'Energy Level', value: result?.log?.energy_state || 'Stable', color: 'var(--text-primary)' },
               ].map(m => (
                 <div key={m.label} style={{ background: 'var(--bg-color)', borderRadius: '8px', padding: '1rem', border: '1px solid var(--panel-border)' }}>
@@ -272,13 +301,26 @@ export default function PerformanceInput() {
           <button onClick={() => navigate('/dashboard')} style={{ display: 'flex', alignItems: 'center', gap: '0.375rem', background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.8125rem', marginBottom: '1.5rem', padding: 0 }}>
             <ArrowLeft size={14} /> Overview
           </button>
-          <p className="premium-kicker">
-            {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
-          </p>
-          <h1 className="premium-title">How was your day?</h1>
-          <p className="premium-subtitle">
-            Track your tasks, focus, obstacles, and notes in one simple log.
-          </p>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            <div>
+              <p className="premium-kicker">
+                {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+              </p>
+              <h1 className="premium-title">How was your day?</h1>
+              <p className="premium-subtitle">
+                Track your tasks, focus, obstacles, and notes in one simple log.
+              </p>
+            </div>
+            {todayTasks.length > 0 && (
+              <div style={{ textAlign: 'right' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--accent-primary)', fontWeight: 800, fontSize: '1.25rem' }}>
+                  <TrendingUp size={20} /> 
+                  {Math.round((todayTasks.filter(t => t.is_completed).length / todayTasks.length) * 100)}%
+                </div>
+                <p style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Protocol Completion</p>
+              </div>
+            )}
+          </div>
         </div>
 
         <section className="premium-section">
@@ -356,15 +398,23 @@ export default function PerformanceInput() {
                         <p style={{ fontSize: '0.625rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{t.task_type}</p>
                       </div>
                     </div>
-                    <span style={{
-                      fontSize: '0.7rem', fontWeight: 700, flexShrink: 0,
-                      padding: '0.2rem 0.6rem', borderRadius: '6px',
-                      background: t.is_completed ? 'var(--success-subtle)' : 'var(--panel-bg)',
-                      color: t.is_completed ? 'var(--success)' : 'var(--text-muted)',
-                      border: `1px solid ${t.is_completed ? 'rgba(16,185,129,0.2)' : 'var(--panel-border)'}`,
-                    }}>
-                      {t.is_completed ? 'Done' : 'Pending'}
-                    </span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <span style={{
+                        fontSize: '0.7rem', fontWeight: 700, flexShrink: 0,
+                        padding: '0.2rem 0.6rem', borderRadius: '6px',
+                        background: t.is_completed ? 'var(--success-subtle)' : 'var(--panel-bg)',
+                        color: t.is_completed ? 'var(--success)' : 'var(--text-muted)',
+                        border: `1px solid ${t.is_completed ? 'rgba(16,185,129,0.2)' : 'var(--panel-border)'}`,
+                      }}>
+                        {t.is_completed ? 'Done' : 'Pending'}
+                      </span>
+                      <button 
+                        onClick={(e) => { e.stopPropagation(); deleteTask(t.id); }}
+                        style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: '0.2rem' }}
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
                   </button>
                 ))}
               </div>

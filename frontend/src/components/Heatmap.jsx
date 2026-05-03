@@ -13,35 +13,45 @@ export default function Heatmap({ logs }) {
 
   const monthsData = useMemo(() => {
     const today = new Date();
-    // Generate data for the current month only
-    const month = today.getMonth();
-    const year = today.getFullYear();
+    const months = [];
 
-    const firstDayOfMonth = new Date(year, month, 1).getDay();
-    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    // Generate data for the last 4 months
+    for (let i = 0; i < 4; i++) {
+      const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
+      const month = d.getMonth();
+      const year = d.getFullYear();
 
-    const days = [];
-    // Padding for the start of the month
-    for (let p = 0; p < firstDayOfMonth; p++) {
-      days.push(null);
+      const firstDayOfMonth = new Date(year, month, 1).getDay();
+      const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+      const days = [];
+      // Padding for the start of the month
+      for (let p = 0; p < firstDayOfMonth; p++) {
+        days.push(null);
+      }
+
+      // Actual days
+      for (let day = 1; day <= daysInMonth; day++) {
+        const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        // Safe find: check both 'log_date' and 'date' keys, and ensure they exist before calling startsWith
+        const logEntry = logs?.find(l => {
+          const d = l.log_date || l.date;
+          return d && d.startsWith(dateStr);
+        });
+
+        days.push({
+          day,
+          date: dateStr,
+          done: (logEntry?.performance_score || 0) > 0,
+          focus: logEntry?.focus_level,
+          mood: logEntry?.mood,
+          notes: logEntry?.notes
+        });
+      }
+      months.push({ name: MONTH_NAMES[month], year, days });
     }
 
-    // Actual days
-    for (let day = 1; day <= daysInMonth; day++) {
-      const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-      const logEntry = logs?.find(l => l.log_date.startsWith(dateStr));
-
-      days.push({
-        day,
-        date: dateStr,
-        done: logEntry?.task_done,
-        focus: logEntry?.focus_level,
-        mood: logEntry?.mood,
-        notes: logEntry?.notes
-      });
-    }
-
-    return [{ name: MONTH_NAMES[month], year, days }];
+    return months; // Return all 4 months
   }, [logs]);
 
   const getColor = (entry) => {
@@ -68,9 +78,9 @@ export default function Heatmap({ logs }) {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '2rem' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '2rem' }}>
         {monthsData.map((month, mIdx) => (
-          <div key={mIdx} style={{ animation: `fadeIn 0.5s ease-out ${mIdx * 0.1}s both` }}>
+          <div key={mIdx} style={{ animation: `fadeIn 0.5s ease-out ${mIdx * 0.1}s both`, background: 'var(--bg-color)', padding: '1rem', borderRadius: '12px', border: '1px solid var(--panel-border)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
                <h4 style={{ fontSize: '0.875rem', fontWeight: 800, color: 'var(--text-primary)' }}>{month.name} <span style={{ opacity: 0.5, fontWeight: 400 }}>{month.year}</span></h4>
             </div>

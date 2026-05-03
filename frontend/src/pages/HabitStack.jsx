@@ -16,7 +16,7 @@ function HabitStack() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-  const { token, logout } = useAuth();
+  const { token, logout, updateUser } = useAuth();
   const navigate = useNavigate();
 
   const headers = { ...authHeaders(token), 'Content-Type': 'application/json' };
@@ -82,7 +82,13 @@ function HabitStack() {
       });
       const data = await safeJson(res);
       if (!res.ok) throw new Error(data?.error || 'Failed');
-      setHabits(prev => [data, ...prev]);
+      
+      // Update global user state (XP/Level)
+      if (data.total_xp !== undefined) {
+        updateUser({ total_xp: data.total_xp, level: data.level });
+      }
+      
+      setHabits(prev => [data.habit, ...prev]);
       setTrigger('');
       setNewHabit('');
     } catch (err) {

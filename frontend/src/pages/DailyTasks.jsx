@@ -16,6 +16,11 @@ export default function DailyTasks() {
   const [newTaskType, setNewTaskType] = useState('primary');
   const [addingTask, setAddingTask] = useState(false);
   const [generatingTasks, setGeneratingTasks] = useState(false);
+  
+  // Metrics state
+  const [focusLevel, setFocusLevel] = useState(3);
+  const [energyState, setEnergyState] = useState('Stable');
+  const [savingMetrics, setSavingMetrics] = useState(false);
 
   const { token, logout, updateUser } = useAuth();
   const navigate = useNavigate();
@@ -28,6 +33,10 @@ export default function DailyTasks() {
       const payload = await safeJson(res);
       const day = payload?.days?.[0];
       setTasks(day?.tasks || []);
+      if (day) {
+        setFocusLevel(Number(day.focus_level || 3));
+        setEnergyState(day.energy_state || 'Stable');
+      }
     } catch (e) {
       console.error(e);
     }
@@ -59,7 +68,16 @@ export default function DailyTasks() {
 
   const handleAddTask = async () => {
     if (!newTaskTitle.trim() || !goal) return;
+    const title = newTaskTitle.trim();
+    const type = newTaskType;
+    setNewTaskTitle('');
     setAddingTask(true);
+    
+    // Optimistic placeholder
+    const tempId = Date.now();
+    const tempTask = { id: tempId, title, task_type: type, is_completed: 0, is_temp: true };
+    setTasks(prev => [...prev, tempTask]);
+
     try {
       const today = new Date().toISOString().slice(0, 10);
       const res = await fetch(`${API_BASE}/tasks/custom`, {
@@ -68,22 +86,28 @@ export default function DailyTasks() {
         body: JSON.stringify({
           goal_id: goal.id,
           log_date: today,
-          task_type: newTaskType,
-          title: newTaskTitle.trim(),
+          task_type: type,
+          title: title,
         }),
       });
       if (res.ok) {
-        setNewTaskTitle('');
         fetchTasks(goal.id);
+      } else {
+        setTasks(prev => prev.filter(t => t.id !== tempId));
       }
     } catch (e) {
       console.error(e);
+      setTasks(prev => prev.filter(t => t.id !== tempId));
     } finally {
       setAddingTask(false);
     }
   };
 
   const handleToggleTask = async (taskId) => {
+    // OPTIMISTIC UPDATE: Update UI immediately
+    const originalTasks = [...tasks];
+    setTasks(prev => prev.map(t => t.id === taskId ? { ...t, is_completed: !t.is_completed } : t));
+    
     try {
       const res = await fetch(`${API_BASE}/tasks/${taskId}/toggle`, {
         method: 'PUT',
@@ -94,10 +118,18 @@ export default function DailyTasks() {
         if (data.total_xp !== undefined) {
           updateUser({ total_xp: data.total_xp, level: data.level });
         }
-        fetchTasks(goal.id);
+        // Silent refresh in background to ensure sync
+        const today = new Date().toISOString().slice(0, 10);
+        const freshRes = await fetch(`${API_BASE}/logs?goal_id=${goal.id}&from=${today}&to=${today}&limit=1`, { headers: authHeaders(token) });
+        const payload = await safeJson(freshRes);
+        setTasks(payload?.days?.[0]?.tasks || []);
+      } else {
+        // Rollback on server error
+        setTasks(originalTasks);
       }
     } catch (e) {
       console.error(e);
+      setTasks(originalTasks); // Rollback on network error
     }
   };
 
@@ -136,6 +168,27 @@ export default function DailyTasks() {
       console.error(e);
     } finally {
       setGeneratingTasks(false);
+    }
+  };
+
+  const handleUpdateMetrics = async (newFocus, newEnergy) => {
+    setSavingMetrics(true);
+    try {
+      const today = new Date().toISOString().slice(0, 10);
+      await fetch(`${API_BASE}/logs`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeaders(token) },
+        body: JSON.stringify({
+          goal_id: goal.id,
+          log_date: today,
+          focus_level: newFocus,
+          energy_state: newEnergy
+        }),
+      });
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setSavingMetrics(false);
     }
   };
 
@@ -277,13 +330,42 @@ export default function DailyTasks() {
               </button>
 
               <div style={{ marginTop: '2rem', paddingTop: '1.5rem', borderTop: '1px solid var(--panel-border)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
-                  <Activity size={18} color="var(--accent-primary)" />
-                  <div>
-                    <p style={{ fontSize: '0.8rem', fontWeight: 800, color: 'var(--text-primary)' }}>Daily Synergy</p>
-                    <p style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Tasks help calibrate your XP.</p>
-                  </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                  <label style={{ fontSize: '0.7rem', fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Focus Level</label>
+                  <span style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--accent-primary)' }}>{focusLevel}/5</span>
                 </div>
+                <input 
+                  type="range" min="1" max="5" value={focusLevel} 
+                  onChange={e => {
+                    const val = Number(e.target.value);
+                    setFocusLevel(val);
+                    handleUpdateMetrics(val, energyState);
+                  }}
+                  style={{ width: '100%', accentColor: 'var(--accent-primary)', cursor: 'pointer', marginBottom: '1.5rem' }}
+                />
+
+                <label style={{ fontSize: '0.7rem', fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '0.75rem', display: 'block' }}>Energy State</label>
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  {['Low', 'Stable', 'High'].map(s => (
+                    <button 
+                      key={s} 
+                      onClick={() => {
+                        setEnergyState(s);
+                        handleUpdateMetrics(focusLevel, s);
+                      }}
+                      style={{
+                        flex: 1, padding: '0.4rem', fontSize: '0.7rem', fontWeight: 700, borderRadius: '6px', cursor: 'pointer',
+                        border: `1px solid ${energyState === s ? 'var(--accent-primary)' : 'var(--panel-border)'}`,
+                        background: energyState === s ? 'var(--accent-subtle)' : 'var(--bg-color)',
+                        color: energyState === s ? 'var(--accent-primary)' : 'var(--text-muted)',
+                        transition: 'all 0.2s'
+                      }}
+                    >
+                      {s}
+                    </button>
+                  ))}
+                </div>
+                {savingMetrics && <p style={{ fontSize: '0.6rem', color: 'var(--text-muted)', marginTop: '0.5rem', textAlign: 'center' }}>Saving state...</p>}
               </div>
             </div>
           </aside>

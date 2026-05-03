@@ -34,7 +34,7 @@ function DashboardLayout({ children, overlayClass = "" }) {
 
   const navItems = [
     { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
-    { name: 'Daily Tasks', path: '/tasks', icon: CheckCircle2 },
+    { name: 'Daily Log', path: '/log', icon: CheckCircle2 },
     { name: 'Habit Stack', path: '/habits', icon: Calendar },
     { name: 'Performance AI', path: '/analysis', icon: BrainCircuit },
     { name: 'Insights', path: '/insights', icon: Lightbulb },

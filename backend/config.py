@@ -11,3 +11,4 @@ class Config:
     GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
     CORS_ORIGIN = os.environ.get("CORS_ORIGIN", "http://localhost:5173")
     DEBUG = os.environ.get("DEBUG", "True").lower() == "true"
+    JWT_ACCESS_TOKEN_EXPIRES = 30 * 24 * 60 * 60 # 30 days in seconds

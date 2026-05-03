@@ -11,12 +11,14 @@ from .routes.logs import bp as logs_bp
 from .routes.tasks import bp as tasks_bp
 from .routes.analytics import bp as analytics_bp
 from .routes.ai import bp as ai_bp
+from .routes.habits import bp as habits_bp
 
 
 def create_app() -> Flask:
     app = Flask(__name__)
     app.config["SECRET_KEY"] = Config.SECRET_KEY
     app.config["JWT_SECRET_KEY"] = Config.JWT_SECRET_KEY
+    app.config["JWT_ACCESS_TOKEN_EXPIRES"] = getattr(Config, "JWT_ACCESS_TOKEN_EXPIRES", 3600)
 
     # Extensions
     JWTManager(app)
@@ -37,6 +39,7 @@ def create_app() -> Flask:
     app.register_blueprint(tasks_bp)
     app.register_blueprint(analytics_bp)
     app.register_blueprint(ai_bp)
+    app.register_blueprint(habits_bp)
 
     return app
 

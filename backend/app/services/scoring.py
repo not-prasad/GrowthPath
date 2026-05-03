@@ -13,6 +13,8 @@ class ScoreInputs:
     support_total: int
     optimize_done: int
     optimize_total: int
+    custom_done: int
+    custom_total: int
     focus_level: float  # expected 0..5
     friction_count: int
 
@@ -27,6 +29,8 @@ def compute_performance_score(inp: ScoreInputs) -> float:
     support_done = max(min(int(inp.support_done or 0), support_total), 0)
     optimize_total = max(int(inp.optimize_total or 0), 0)
     optimize_done = max(min(int(inp.optimize_done or 0), optimize_total), 0)
+    custom_total = max(int(inp.custom_total or 0), 0)
+    custom_done = max(min(int(inp.custom_done or 0), custom_total), 0)
     
     focus = _clamp(float(inp.focus_level if inp.focus_level is not None else 3.0), 0.0, 5.0)
     friction = max(int(inp.friction_count or 0), 0)
@@ -37,12 +41,39 @@ def compute_performance_score(inp: ScoreInputs) -> float:
     
     support_score = (support_done / support_total) if support_total > 0 else 1.0
     optimize_score = (optimize_done / optimize_total) if optimize_total > 0 else 1.0
+    custom_score = (custom_done / custom_total) if custom_total > 0 else 1.0
     focus_score = focus / 5.0
 
+    # Dynamic Weights: Only weight components that actually have tasks.
+    # We always weight Primary (0.50), Focus (0.10). 
+    # The remaining 0.40 is split between Support, Optimize, and Custom IF they exist.
+    
+    total_dynamic_weight = 0.40
+    components_to_weight = []
+    if support_total > 0: components_to_weight.append('support')
+    if optimize_total > 0: components_to_weight.append('optimize')
+    if custom_total > 0: components_to_weight.append('custom')
+    
+    # Calculate weights based on existence
+    if not components_to_weight:
+        # All extra weight goes to Primary if no sub-tasks exist
+        w_primary = 0.50 + total_dynamic_weight
+        w_support = 0
+        w_optimize = 0
+        w_custom = 0
+    else:
+        # Split the 0.40 among available components
+        share = total_dynamic_weight / len(components_to_weight)
+        w_primary = 0.50
+        w_support = share if 'support' in components_to_weight else 0
+        w_optimize = share if 'optimize' in components_to_weight else 0
+        w_custom = share if 'custom' in components_to_weight else 0
+
     weighted = (
-        primary_score * 0.55 +
-        support_score * 0.20 +
-        optimize_score * 0.15 +
+        primary_score * w_primary +
+        support_score * w_support +
+        optimize_score * w_optimize +
+        custom_score * w_custom +
         focus_score * 0.10
     )
 
@@ -60,16 +91,16 @@ def compute_performance_score(inp: ScoreInputs) -> float:
     return round(final_score, 2)
 
 
-def compute_xp(primary_done: bool, support_done: int, optimize_done: int) -> int:
+def compute_xp(primary_done: bool, support_done: int, optimize_done: int, custom_done: int = 0) -> int:
     """
     Balanced XP reward system.
-    Primary tasks are now the most valuable.
     """
     xp = 0
     if primary_done:
-        xp += 250 # Reward deep work heavily
-    xp += (int(support_done or 0) * 35) # Support tasks are secondary
-    xp += (int(optimize_done or 0) * 60) # Optimization/Growth is rewarded
+        xp += 250 
+    xp += (int(support_done or 0) * 35) 
+    xp += (int(optimize_done or 0) * 60)
+    xp += (int(custom_done or 0) * 20) # 20 XP per custom task
     return xp
 
 

@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { 
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, 
   LineChart, Line, CartesianGrid, Legend, Cell, PieChart, Pie,
-  ScatterChart, Scatter, ZAxis
+  ScatterChart, Scatter, ZAxis, AreaChart, Area
 } from 'recharts';
 import { 
   TrendingUp, TrendingDown, Minus, Target, Flame, 
@@ -11,8 +11,12 @@ import {
   Filter, Calendar, Download, RefreshCw
 } from 'lucide-react';
 import DashboardLayout from '../components/DashboardLayout';
+import Heatmap from '../components/Heatmap';
 import { useAuth } from '../context/AuthContext';
 import { API_BASE, authHeaders, safeJson } from '../api/base';
+
+// Simple Calendar Component
+// Local ActivityCalendar deleted in favor of global Heatmap component
 
 function Analysis() {
   const [goal, setGoal] = useState(null);
@@ -30,7 +34,6 @@ function Analysis() {
         const h = authHeaders(token);
         const stored = localStorage.getItem('growthpath_goal_id');
 
-        // 1. Resolve Goal First
         const goalsRes = await fetch(`${API_BASE}/goals`, { headers: h });
         if (goalsRes.status === 401) { logout(); navigate('/login'); return; }
         
@@ -38,7 +41,6 @@ function Analysis() {
         const goals = goalsPayload?.goals || [];
         const active = goalsPayload?.active_goal_id;
 
-        // Smart Sync logic
         let currentGoal = goals.find(g => String(g.id) === String(stored));
         if (!currentGoal) {
             currentGoal = goals.find(g => String(g.id) === String(active)) || goals[0];
@@ -52,7 +54,6 @@ function Analysis() {
 
         const goalId = currentGoal.id;
         
-        // 2. Perform Bulk Analysis Fetch (High Performance)
         const [summaryRes, briefRes, logsRes] = await Promise.all([
           fetch(`${API_BASE}/analytics/summary?goal_id=${goalId}`, { headers: h }),
           fetch(`${API_BASE}/ai/brief?goal_id=${goalId}`, { headers: h }),
@@ -76,9 +77,28 @@ function Analysis() {
     fetchAll();
   }, [token, navigate, logout]);
 
-  // UI rendering remains the same...
+  const handleExportPDF = async () => {
+    if (!goal) return;
+    try {
+      const h = authHeaders(token);
+      const res = await fetch(`${API_BASE}/analytics/export/pdf?goal_id=${goal.id}`, { headers: h });
+      if (res.ok) {
+        const blob = await res.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `GrowthPath_Report_${goal.id}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      }
+    } catch (err) {
+      console.error("PDF Export failed:", err);
+    }
+  };
+
   if (loading) return (
-    <DashboardLayout goal={goal} overlayClass="bg-analysis">
+    <DashboardLayout goal={goal}>
       <div className="premium-page" style={{ alignItems: 'center', justifyContent: 'center', minHeight: '60vh' }}>
         <RefreshCw className="spin" size={40} color="var(--accent-primary)" />
         <p className="premium-muted">Synthesizing benchmark data...</p>
@@ -86,102 +106,203 @@ function Analysis() {
     </DashboardLayout>
   );
 
-  const stats = analysis || {};
-  const historyData = [...(stats.history || [])].reverse();
-  const frictionData = stats.friction_map || [];
+  const stats = analysis?.summary || {};
   
+  // Computations for Performance Summary
+  const avgScore = logs.length ? Math.round(logs.reduce((acc, l) => acc + (l.performance_score || 0), 0) / logs.length) : 0;
+  const trendDir = stats.line?.stats?.delta > 0 ? "Improving" : (stats.line?.stats?.delta < 0 ? "Declining" : "Stable");
+  const briefText = typeof brief?.brief === 'string' ? brief.brief : brief?.brief?.daily_analyst_brief || "No brief available.";
+
+  const historyData = [...(stats.line?.data?.data || [])];
+  const categoryData = stats.category_completion?.data?.data || [];
+  const weekdayData = stats.weekday?.data?.data || [];
+  const focusData = stats.scatter_focus?.data?.data || [];
+
+  const renderEmptyState = () => (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text-muted)' }}>
+      Log more days to unlock this insight
+    </div>
+  );
+
   return (
-    <DashboardLayout goal={goal} overlayClass="bg-analysis">
+    <DashboardLayout goal={goal}>
       <div className="premium-page fade-in">
         <header className="premium-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
             <p className="premium-kicker">Performance Lab</p>
-            <h1 className="premium-title">Visual Intelligence</h1>
+            <h1 className="premium-title">Analysis</h1>
             <p className="premium-subtitle">Advanced analytics and behavioral pattern mapping.</p>
           </div>
           <div style={{ display: 'flex', gap: '0.75rem' }}>
-            <button className="btn btn-outline" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <Download size={16} /> Export JSON
+            <button 
+              className="btn btn-outline" 
+              onClick={handleExportPDF}
+              style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}
+            >
+              <Download size={16} /> Export PDF Report
             </button>
           </div>
         </header>
 
-        {/* Top Insights Brief */}
-        {brief && (
-          <section className="premium-section" style={{ 
-            background: 'var(--header-gradient)', border: 'none', 
-            borderRadius: '24px', padding: '2rem', color: '#fff',
-            marginBottom: '2rem', boxShadow: '0 10px 30px rgba(99, 102, 241, 0.2)'
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
-              <Sparkles size={20} />
-              <h3 style={{ fontWeight: 800, fontSize: '1.1rem', letterSpacing: '0.05em', color: '#fff' }}>SYSTEM ANALYST BRIEF</h3>
+        {/* Top: Performance Summary */}
+        <section className="premium-section" style={{ padding: '1.5rem 2rem' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap' }}>
+              <div>
+                <p style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Avg Score (30d)</p>
+                <p style={{ fontSize: '1.75rem', fontWeight: 900, color: 'var(--text-primary)' }}>{avgScore}%</p>
+              </div>
+              <div>
+                <p style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Trend</p>
+                <p style={{ fontSize: '1.75rem', fontWeight: 900, color: 'var(--text-primary)' }}>{trendDir}</p>
+              </div>
+              <div>
+                <p style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Total Days</p>
+                <p style={{ fontSize: '1.75rem', fontWeight: 900, color: 'var(--text-primary)' }}>{logs.length}</p>
+              </div>
             </div>
-            <p style={{ fontSize: '1.05rem', lineHeight: 1.6, opacity: 0.95, fontWeight: 450, color: '#fff' }}>{brief.brief}</p>
-          </section>
-        )}
+            {briefText && (
+              <div style={{ borderTop: '1px solid var(--panel-border)', paddingTop: '1rem' }}>
+                <p style={{ fontSize: '1rem', color: 'var(--text-primary)', fontWeight: 500 }}>
+                  <Sparkles size={16} style={{ display: 'inline', marginRight: '8px', color: 'var(--accent-primary)' }}/>
+                  {briefText}
+                </p>
+              </div>
+            )}
+          </div>
+        </section>
 
+        {/* Middle: Two Charts */}
         <div className="premium-grid-two">
-          {/* Main Score History Chart */}
-          <section className="premium-section">
-            <h3 className="premium-mini-title">Score History</h3>
-            <div style={{ height: 300, marginTop: '1.5rem' }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={historyData}>
-                  <defs>
-                    <linearGradient id="scoreColor" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="var(--accent-primary)" stopOpacity={0.3}/>
-                      <stop offset="95%" stopColor="var(--accent-primary)" stopOpacity={0}/>
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="var(--panel-border)" />
-                  <XAxis dataKey="date" tick={{fill: 'var(--text-muted)', fontSize: 10}} tickFormatter={v => v.slice(8)} />
-                  <YAxis domain={[0, 100]} tick={{fill: 'var(--text-muted)', fontSize: 10}} />
-                  <Tooltip contentStyle={{ background: 'var(--panel-bg)', border: '1px solid var(--panel-border)', borderRadius: '12px' }} />
-                  <Area type="monotone" dataKey="score" stroke="var(--accent-primary)" strokeWidth={3} fill="url(#scoreColor)" />
-                </AreaChart>
-              </ResponsiveContainer>
+          {/* Score History */}
+          <section className="premium-section" style={{ display: 'flex', flexDirection: 'column' }}>
+            <h3 style={{ fontSize: '1.1rem', fontWeight: 800, marginBottom: '0.5rem' }}>Score History</h3>
+            <div style={{ flex: 1, minHeight: '250px' }}>
+              {historyData.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={historyData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--panel-border)" />
+                    <XAxis dataKey="x" tick={{fontSize: 10, fill: 'var(--text-muted)'}} tickFormatter={v => v.slice(5)} />
+                    <YAxis domain={[0, 100]} tick={{fontSize: 10, fill: 'var(--text-muted)'}} />
+                    <Tooltip contentStyle={{ borderRadius: '8px', border: '1px solid var(--panel-border)', background: 'var(--panel-bg)' }} />
+                    <Line type="monotone" dataKey="y" stroke="var(--accent-primary)" strokeWidth={3} dot={{ r: 3, fill: 'var(--accent-primary)' }} activeDot={{ r: 5 }} />
+                  </LineChart>
+                </ResponsiveContainer>
+              ) : renderEmptyState()}
             </div>
+            <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '1rem', textAlign: 'center' }}>
+              {stats.line?.interpretation || "No interpretation available."}
+            </p>
           </section>
 
-          {/* Friction vs Score Correlation */}
-          <section className="premium-section">
-            <h3 className="premium-mini-title">Friction vs Focus Correlation</h3>
-            <div style={{ height: 300, marginTop: '1.5rem' }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <ScatterChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--panel-border)" />
-                  <XAxis type="number" dataKey="friction" name="Friction" unit="pts" tick={{fill: 'var(--text-muted)'}} label={{ value: 'Friction Count', position: 'bottom', fill: 'var(--text-muted)', fontSize: 10 }} />
-                  <YAxis type="number" dataKey="score" name="Performance" unit="%" tick={{fill: 'var(--text-muted)'}} label={{ value: 'Score %', angle: -90, position: 'insideLeft', fill: 'var(--text-muted)', fontSize: 10 }} />
-                  <ZAxis type="number" dataKey="focus" range={[50, 400]} />
-                  <Tooltip cursor={{ strokeDasharray: '3 3' }} contentStyle={{ background: 'var(--panel-bg)', border: '1px solid var(--panel-border)', borderRadius: '12px' }} />
-                  <Scatter name="Days" data={frictionData} fill="var(--secondary)" />
-                </ScatterChart>
-              </ResponsiveContainer>
+          {/* Category Completion */}
+          <section className="premium-section" style={{ display: 'flex', flexDirection: 'column' }}>
+            <h3 style={{ fontSize: '1.1rem', fontWeight: 800, marginBottom: '0.5rem' }}>Category Completion</h3>
+            <div style={{ flex: 1, minHeight: '250px' }}>
+              {categoryData.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={categoryData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--panel-border)" />
+                    <XAxis dataKey="category" tick={{fontSize: 10, fill: 'var(--text-muted)', textTransform: 'capitalize'}} />
+                    <YAxis tick={{fontSize: 10, fill: 'var(--text-muted)'}} />
+                    <Tooltip contentStyle={{ borderRadius: '8px', border: '1px solid var(--panel-border)', background: 'var(--panel-bg)' }} />
+                    <Bar dataKey="completed" fill="var(--success)" radius={[4, 4, 0, 0]} name="Completed" />
+                    <Bar dataKey="total" fill="var(--panel-border)" radius={[4, 4, 0, 0]} name="Total" />
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : renderEmptyState()}
             </div>
+            <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '1rem', textAlign: 'center' }}>
+              {stats.category_completion?.interpretation || "No interpretation available."}
+            </p>
           </section>
         </div>
 
-        {/* Bottom Consistency Ledger */}
-        <section className="premium-section" style={{ marginTop: '2rem' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-            <h3 className="premium-mini-title">Consistency Ledger</h3>
-            <div style={{ display: 'flex', gap: '0.5rem' }}>
-               <div className="badge badge-purple">90 DAY ARCHIVE</div>
+        {/* Below: Two Charts */}
+        <div className="premium-grid-two">
+          {/* Weekday Analysis */}
+          <section className="premium-section" style={{ display: 'flex', flexDirection: 'column' }}>
+            <h3 style={{ fontSize: '1.1rem', fontWeight: 800, marginBottom: '0.5rem' }}>Weekday Analysis</h3>
+            <div style={{ flex: 1, minHeight: '250px' }}>
+              {weekdayData.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={weekdayData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--panel-border)" />
+                    <XAxis dataKey="weekday" tick={{fontSize: 10, fill: 'var(--text-muted)'}} />
+                    <YAxis domain={[0, 100]} tick={{fontSize: 10, fill: 'var(--text-muted)'}} />
+                    <Tooltip contentStyle={{ borderRadius: '8px', border: '1px solid var(--panel-border)', background: 'var(--panel-bg)' }} />
+                    <Bar dataKey="avg_score" fill="var(--accent-primary)" radius={[4, 4, 0, 0]} name="Avg Score" />
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : renderEmptyState()}
             </div>
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '1rem' }}>
-             {logs.slice(0, 12).map((log, i) => (
-               <div key={i} className="glass-card" style={{ padding: '1rem', borderLeft: `3px solid ${log.performance_score >= 80 ? 'var(--success)' : log.performance_score >= 50 ? 'var(--secondary)' : 'var(--danger)'}` }}>
-                  <p style={{ fontSize: '0.7rem', fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase' }}>{log.date}</p>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginTop: '0.5rem' }}>
-                     <span style={{ fontWeight: 900, fontSize: '1.2rem' }}>{Math.round(log.performance_score)}%</span>
-                     <span style={{ fontSize: '0.75rem', opacity: 0.6 }}>{log.focus_level} FOC</span>
-                  </div>
-               </div>
-             ))}
-          </div>
+            <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '1rem', textAlign: 'center' }}>
+              {stats.weekday?.interpretation || "No interpretation available."}
+            </p>
+          </section>
+
+          {/* Focus vs Score */}
+          <section className="premium-section" style={{ display: 'flex', flexDirection: 'column' }}>
+            <h3 style={{ fontSize: '1.1rem', fontWeight: 800, marginBottom: '0.5rem' }}>Focus vs Score</h3>
+            <div style={{ flex: 1, minHeight: '250px' }}>
+              {focusData.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <ScatterChart margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--panel-border)" />
+                    <XAxis type="number" dataKey="x" name="Focus" tick={{fontSize: 10, fill: 'var(--text-muted)'}} domain={[0, 5]} />
+                    <YAxis type="number" dataKey="y" name="Score" domain={[0, 100]} tick={{fontSize: 10, fill: 'var(--text-muted)'}} />
+                    <Tooltip cursor={{ strokeDasharray: '3 3' }} contentStyle={{ borderRadius: '8px', border: '1px solid var(--panel-border)', background: 'var(--panel-bg)' }} />
+                    <Scatter data={focusData} fill="var(--accent-primary)" />
+                  </ScatterChart>
+                </ResponsiveContainer>
+              ) : renderEmptyState()}
+            </div>
+            <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '1rem', textAlign: 'center' }}>
+              {stats.scatter_focus?.interpretation || "No interpretation available."}
+            </p>
+          </section>
+        </div>
+
+        {/* Bottom: Activity Calendar */}
+        <section className="premium-section">
+          <Heatmap logs={logs} />
         </section>
+
+        {/* Consistency Ledger Table */}
+        <section className="premium-section">
+          <h3 style={{ fontSize: '1.1rem', fontWeight: 800, marginBottom: '1.5rem' }}>Consistency Ledger</h3>
+          {logs.length > 0 ? (
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.9rem' }}>
+                <thead>
+                  <tr style={{ borderBottom: '2px solid var(--panel-border)', color: 'var(--text-secondary)' }}>
+                    <th style={{ padding: '0.75rem 0' }}>Date</th>
+                    <th style={{ padding: '0.75rem 0' }}>Score</th>
+                    <th style={{ padding: '0.75rem 0' }}>Focus</th>
+                    <th style={{ padding: '0.75rem 0' }}>Tasks Done</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[...logs].reverse().map((log, i) => {
+                    const doneCount = (log.tasks || []).filter(t => t.is_completed).length;
+                    const totalCount = (log.tasks || []).length;
+                    return (
+                      <tr key={i} style={{ borderBottom: '1px solid var(--panel-border)' }}>
+                        <td style={{ padding: '0.75rem 0', fontWeight: 600 }}>{log.date}</td>
+                        <td style={{ padding: '0.75rem 0', color: log.performance_score >= 80 ? 'var(--success)' : (log.performance_score >= 50 ? 'var(--accent-primary)' : 'var(--danger)'), fontWeight: 800 }}>
+                          {Math.round(log.performance_score)}%
+                        </td>
+                        <td style={{ padding: '0.75rem 0' }}>{log.focus_level} / 5</td>
+                        <td style={{ padding: '0.75rem 0' }}>{doneCount} / {totalCount}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          ) : renderEmptyState()}
+        </section>
+
       </div>
     </DashboardLayout>
   );

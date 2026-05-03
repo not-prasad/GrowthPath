@@ -127,14 +127,15 @@ def generate_tasks():
     goal_id = _resolve_goal_id(user_id, str(data.get("goal_id")) if data.get("goal_id") is not None else None)
     log_date = as_date_yyyy_mm_dd(data.get("log_date"), field="log_date")
 
-    goal = query_one("SELECT title, deadline_days FROM goals WHERE id=? AND user_id=?", (goal_id, user_id))
+    goal = query_one("SELECT title, category, deadline_days FROM goals WHERE id=? AND user_id=?", (goal_id, user_id))
     if not goal:
         raise ApiError("not_found", "Goal not found.", 404)
 
     # Generate tasks via AI
     task_titles = generate_ai_tasks(
         goal_title=goal["title"],
-        deadline_days=goal["deadline_days"]
+        deadline_days=goal["deadline_days"],
+        category=goal.get("category")
     )
 
     log_id = _ensure_log(user_id, goal_id, log_date)

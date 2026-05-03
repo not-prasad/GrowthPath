@@ -16,6 +16,7 @@ import { API_BASE, authHeaders, safeJson } from '../api/base';
 function Dashboard() {
   const [goal, setGoal] = useState(null);
   const [trends, setTrends] = useState(null);
+  const [streakData, setStreakData] = useState(null);
   const [days, setDays] = useState([]);
   const [insights, setInsights] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -51,6 +52,7 @@ function Dashboard() {
         const goalsPayload = await safeJson(goalsRes);
         const goals = goalsPayload?.goals || [];
         const active = goalsPayload?.active_goal_id;
+        console.log('[Dashboard] /api/goals response:', { goals_count: goals.length, active_goal_id: active, goals });
 
         // Smart Sync: Verify if stored ID is valid, otherwise pick a new one
         let currentGoal = goals.find(g => String(g.id) === String(goalId));
@@ -70,13 +72,15 @@ function Dashboard() {
         setGoal(currentGoal);
 
         // 2. Fetch Dashboard Core Data (Fast stuff)
-        const [trendsRes, logsRes] = await Promise.all([
+        const [trendsRes, logsRes, streakRes] = await Promise.all([
           fetch(`${API_BASE}/performance/trends?goal_id=${currentGoal.id}&days=7`, { headers }),
           fetch(`${API_BASE}/logs?goal_id=${currentGoal.id}&limit=60`, { headers }),
+          fetch(`${API_BASE}/analytics/streak?goal_id=${currentGoal.id}`, { headers })
         ]);
 
-        if (trendsRes.ok) { const t = await safeJson(trendsRes); setTrends(t?.trends || null); }
-        if (logsRes.ok) { const l = await safeJson(logsRes); setDays(l?.days || []); }
+        if (trendsRes.ok) { const t = await safeJson(trendsRes); console.log('[Dashboard] /api/performance/trends response:', t); setTrends(t?.trends || null); }
+        if (logsRes.ok) { const l = await safeJson(logsRes); console.log('[Dashboard] /api/logs response:', { days_count: l?.days?.length, days: l?.days }); setDays(l?.days || []); }
+        if (streakRes.ok) { const s = await safeJson(streakRes); setStreakData(s?.streak || null); }
         
         setLoading(false); // Show the UI as soon as we have core stats
 
@@ -86,8 +90,9 @@ function Dashboard() {
           const insightsRes = await fetch(`${API_BASE}/ai/insights?goal_id=${currentGoal.id}`, { headers });
           if (insightsRes.ok) {
             const ins = await safeJson(insightsRes);
+            console.log('[Dashboard] /api/ai/insights response:', { insights_count: ins?.insights?.length, insights: ins?.insights });
             setInsights(ins?.insights || []);
-          } else { setInsights([]); }
+          } else { console.warn('[Dashboard] /api/ai/insights non-ok status:', insightsRes.status); setInsights([]); }
         } catch (e) {
           console.warn("AI Insights failed to load", e);
         } finally {
@@ -114,11 +119,18 @@ function Dashboard() {
         if (data.total_xp !== undefined) {
           updateUser({ total_xp: data.total_xp, level: data.level });
         }
-        // Force a partial refresh of the day's data
-        const logsRes = await fetch(`${API_BASE}/logs?goal_id=${goal.id}&limit=60`, { headers: authHeaders(token) });
+        // Force a partial refresh of the day's data AND trends for live chart movement
+        const [logsRes, trendsRes] = await Promise.all([
+          fetch(`${API_BASE}/logs?goal_id=${goal.id}&limit=60`, { headers: authHeaders(token) }),
+          fetch(`${API_BASE}/performance/trends?goal_id=${goal.id}&days=7`, { headers: authHeaders(token) })
+        ]);
         if (logsRes.ok) {
           const l = await safeJson(logsRes);
           setDays(l?.days || []);
+        }
+        if (trendsRes.ok) {
+          const t = await safeJson(trendsRes);
+          setTrends(t?.trends || null);
         }
       }
     } catch (err) {
@@ -128,18 +140,7 @@ function Dashboard() {
 
   const trendChartData = useMemo(() => [...(trends?.data || [])].reverse(), [trends]);
 
-  const streak = useMemo(() => {
-    if (!days || days.length === 0) return 0;
-    const todayStr = new Date().toISOString().slice(0, 10);
-    let count = 0;
-    let cursor = new Date(todayStr);
-    const dateSet = new Set(days.map(d => d.date?.slice(0, 10)));
-    while (dateSet.has(cursor.toISOString().slice(0, 10))) {
-      count++;
-      cursor.setDate(cursor.getDate() - 1);
-    }
-    return count;
-  }, [days]);
+  const streak = streakData?.current_streak || 0;
 
   const todayStr = new Date().toISOString().slice(0, 10);
   const todayData = days.find(d => d.date?.startsWith(todayStr));
@@ -201,7 +202,9 @@ function Dashboard() {
             <p className="premium-subtitle" style={{ marginTop: '0.4rem', fontWeight: 500, opacity: 0.7 }}>{todayLabel}</p>
           </div>
           <div style={{ textAlign: 'right' }}>
-            <span className="badge badge-purple" style={{ padding: '0.5rem 1.25rem', fontSize: '0.85rem', borderRadius: '10px' }}>{goal?.category}</span>
+            <span className="badge badge-purple" style={{ padding: '0.5rem 1.25rem', fontSize: '0.85rem', borderRadius: '10px' }}>
+              {goal?.category || 'Strategic Growth'}
+            </span>
           </div>
         </div>
 

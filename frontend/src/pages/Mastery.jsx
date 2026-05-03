@@ -29,6 +29,7 @@ const getPerformanceColor = (score) => {
 function Mastery() {
   const [profile, setProfile] = useState(null);
   const [days, setDays] = useState([]);
+  const [streakData, setStreakData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [goal, setGoal] = useState(null);
   const { token, logout } = useAuth();
@@ -39,7 +40,7 @@ function Mastery() {
       try {
         const headers = authHeaders(token);
         const [meRes, goalsRes] = await Promise.all([
-          fetch(`${API_BASE}/me`, { headers }),
+          fetch(`${API_BASE}/auth/me`, { headers }),
           fetch(`${API_BASE}/goals`, { headers }),
         ]);
         
@@ -56,9 +57,18 @@ function Mastery() {
         if (selected) {
           setGoal(selected);
           localStorage.setItem('growthpath_goal_id', String(selected.id));
-          const daysRes = await fetch(`${API_BASE}/logs?goal_id=${selected.id}&limit=15`, { headers });
-          const payload = await safeJson(daysRes);
-          setDays(payload?.days || []);
+          const [daysRes, streakRes] = await Promise.all([
+            fetch(`${API_BASE}/logs?goal_id=${selected.id}`, { headers }),
+            fetch(`${API_BASE}/analytics/streak?goal_id=${selected.id}`, { headers })
+          ]);
+          if (daysRes.ok) {
+            const payload = await safeJson(daysRes);
+            setDays(payload?.days || []);
+          }
+          if (streakRes.ok) {
+            const payload = await safeJson(streakRes);
+            setStreakData(payload?.streak || null);
+          }
         }
       } catch (err) {
         console.error("Mastery Fetch Error:", err);
@@ -69,19 +79,7 @@ function Mastery() {
     fetchData();
   }, [token, navigate, logout]);
 
-  // Compute streak from days
-  const streak = useMemo(() => {
-    if (!days || days.length === 0) return 0;
-    const todayStr = new Date().toISOString().slice(0, 10);
-    let count = 0;
-    let cursor = new Date(todayStr);
-    const dateSet = new Set(days.map(d => d.date?.slice(0, 10)));
-    while (dateSet.has(cursor.toISOString().slice(0, 10))) {
-      count++;
-      cursor.setDate(cursor.getDate() - 1);
-    }
-    return count;
-  }, [days]);
+  const streak = streakData?.current_streak || 0;
 
   if (loading) return (
     <DashboardLayout goal={goal} overlayClass="bg-mastery">
@@ -112,8 +110,17 @@ function Mastery() {
 
   const currentTier = getTier(profile.level);
   const nextTiers = TIERS.filter(t => t.level > profile.level).slice(0, 3);
-  const currentExp = (profile.total_xp || 0) % 1000;
-  const progressPercent = Math.min(100, Math.round((currentExp / 1000) * 100));
+  
+  // SYNC WITH BACKEND: Level = floor(sqrt(XP / 100)) + 1
+  // Therefore: XP for Level L = (L-1)^2 * 100
+  const currentLevel = profile.level;
+  const xpForCurrentLevel = Math.pow(currentLevel - 1, 2) * 100;
+  const xpForNextLevel = Math.pow(currentLevel, 2) * 100;
+  const totalXpInThisLevel = xpForNextLevel - xpForCurrentLevel;
+  const xpGainedInThisLevel = (profile.total_xp || 0) - xpForCurrentLevel;
+  
+  const progressPercent = Math.min(100, Math.max(0, Math.round((xpGainedInThisLevel / totalXpInThisLevel) * 100)));
+  const xpRemaining = xpForNextLevel - (profile.total_xp || 0);
 
   return (
     <DashboardLayout goal={goal} overlayClass="bg-mastery">
@@ -193,8 +200,8 @@ function Mastery() {
 
             <div style={{ width: '100%', maxWidth: '340px', zIndex: 1 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.75rem', fontSize: '0.75rem', fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
-                <span>Current Progress</span>
-                <span>{currentExp} / 1000 XP</span>
+                <span>Level Progress</span>
+                <span>{xpGainedInThisLevel} / {totalXpInThisLevel} XP</span>
               </div>
               <div style={{ width: '100%', height: '10px', background: 'var(--bg-color)', borderRadius: '999px', overflow: 'hidden', border: '1px solid var(--panel-border)' }}>
                 <div style={{ 
@@ -207,7 +214,7 @@ function Mastery() {
                 }} />
               </div>
               <p style={{ marginTop: '1rem', fontSize: '0.75rem', color: 'var(--text-secondary)', textAlign: 'center', fontWeight: 600 }}>
-                {1000 - currentExp} XP remaining for <strong>Level {profile.level + 1}</strong>
+                {xpRemaining} XP remaining for <strong>Level {profile.level + 1}</strong>
               </p>
             </div>
           </section>

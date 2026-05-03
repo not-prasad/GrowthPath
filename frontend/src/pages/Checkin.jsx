@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { CheckCircle, ArrowLeft, Send, Sparkles, Feather, Book, BookOpen } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { API_BASE, authHeaders } from '../api/base';
 
 const MOODS = ['Happy 😊', 'Neutral 😐', 'Stressed 😞', 'Tired 😴'];
 const HURDLES = [
@@ -39,16 +40,17 @@ function Checkin() {
 
     const fetchAll = async () => {
       try {
-        const headers = { 'Authorization': `Bearer ${token}` };
-        const [goalRes, ctxRes] = await Promise.all([
-          fetch(`http://localhost:5000/api/goals/${goalId}`, { headers }),
-          fetch(`http://localhost:5000/api/goals/${goalId}/checkin-context`, { headers })
-        ]);
-        if (goalRes.status === 401) { logout(); navigate('/login'); return; }
-        if (goalRes.ok) setGoal(await goalRes.json());
-        if (ctxRes.ok) setContext(await ctxRes.json());
+        const headers = authHeaders(token);
+        const goalsRes = await fetch(`${API_BASE}/goals`, { headers });
+        if (goalsRes.status === 401) { logout(); navigate('/login'); return; }
+        if (goalsRes.ok) {
+          const payload = await goalsRes.json();
+          const goals = payload?.goals || [];
+          const found = goals.find(g => String(g.id) === String(goalId)) || goals[0] || null;
+          if (found) setGoal(found);
+        }
       } catch (err) {
-        console.error(err);
+        console.error('Checkin fetch error:', err);
       } finally {
         setLoading(false);
       }
@@ -62,9 +64,9 @@ function Checkin() {
     const goalId = localStorage.getItem('growthpath_goal_id');
     try {
       const energyMap = { 'Happy 😊': 'High', 'Neutral 😐': 'Stable', 'Stressed 😞': 'Low', 'Tired 😴': 'Low' };
-      const response = await fetch('http://localhost:5000/api/logs', {
+      const response = await fetch(`${API_BASE}/logs`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        headers: { 'Content-Type': 'application/json', ...authHeaders(token) },
         body: JSON.stringify({
           goal_id: goalId,
           todo_id: context?.todo?.id, 

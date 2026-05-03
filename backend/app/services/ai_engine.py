@@ -128,7 +128,12 @@ def get_ai_insights(*, goal_title: str, trends: Dict[str, Any], recent_days: Lis
         )
         
         raw = (resp.choices[0].message.content or "").strip()
-        if "```" in raw:
+        # Bug Fix: Use more robust JSON extraction (regex-like)
+        import re
+        json_match = re.search(r'\[\s*\{.*\}\s*\]', raw, re.DOTALL)
+        if json_match:
+            raw = json_match.group(0)
+        elif "```" in raw:
             raw = raw.split("```")[1]
             if raw.startswith("json"):
                 raw = raw[4:]
@@ -264,35 +269,69 @@ def _call_groq(prompt: str) -> Optional[Dict[str, Any]]:
         return None
 
 
-def _deterministic_tasks(goal_title: str) -> List[str]:
+def _deterministic_tasks(goal_title: str, category: Optional[str] = None) -> List[str]:
+    cat_and_title = f"{(category or '')} {goal_title}".lower()
+    
+    if any(kw in cat_and_title for kw in ["health", "fitness", "weight", "diet", "gym", "workout"]):
+        return [
+            "Complete 45m zone-2 cardio session",
+            "Log all macronutrients for today",
+            "Perform 3 sets of compound lifts",
+            "Consume 3 liters of water",
+            "Walk 12,000 steps"
+        ]
+    if any(kw in cat_and_title for kw in ["code", "software", "dev", "program", "app"]):
+        return [
+            "Implement one new backend endpoint",
+            "Write 5 comprehensive unit tests",
+            "Refactor one complex function",
+            "Document 2 API endpoints",
+            "Fix one open bug from the tracker"
+        ]
+    if any(kw in cat_and_title for kw in ["data", "analyt", "sql", "model"]):
+        return [
+            "Clean and validate 100+ rows of raw data",
+            "Execute 3 exploratory data queries",
+            "Update one visualization dashboard",
+            "Identify 2 key statistical correlations",
+            "Document data cleaning steps"
+        ]
+    
     return [
-        f"Deep focus session on {goal_title}",
-        f"Review documentation/resources for {goal_title}",
-        "Identify and remove one friction point",
-        "Log secondary support variables",
-        "Daily calibration check"
+        f"Execute primary high-leverage action for {goal_title}",
+        "Remove one physical friction point from environment",
+        "Log all supporting performance variables",
+        "Complete 25m deep focus sprint",
+        "Finalize top-priority target for tomorrow"
     ]
 
 
-def _build_task_prompt(goal_title: str, deadline_days: int) -> str:
+def _build_task_prompt(goal_title: str, deadline_days: int, category: Optional[str] = None) -> str:
+    cat_context = f"This is a {category} goal." if category else ""
     return (
-        "You are a strategic performance planner.\n"
-        f"Goal: {goal_title}\n"
-        f"Timeline: {deadline_days} days total.\n"
-        "Generate a list of 4-5 high-impact daily tasks for today that move the needle on this goal.\n"
-        "Focus on actionable, measurable steps suitable for the current stage of the goal.\n"
-        "Return ONLY valid JSON: an array of strings. No commentary.\n"
-        "Example: [\"Complete 20m high-intensity sprint\", \"Review technical specs\", \"Update progress log\"]"
+        "You are a HIGH-PERFORMANCE STRATEGIST. Your goal is to provide specific, elite-level execution steps.\n"
+        f"Target Goal: {goal_title}\n"
+        f"{cat_context}\n"
+        f"Remaining Timeline: {deadline_days} days.\n\n"
+        "STRICT EXECUTION RULES:\n"
+        "1. NO GENERIC VERBS: Do not use 'Review', 'Plan', 'Check', 'Study', 'Analyze', 'Session', 'Manage'.\n"
+        "2. NO VAGUE NOUNS: Do not use 'Progress', 'Documentation', 'Resources', 'Basics'.\n"
+        "3. PHYSICAL & CONCRETE: Every task must be a physical action with a measurable outcome.\n"
+        "4. NO MOTIVATION: Use professional, technical, and analytical language.\n"
+        "5. EXACTLY 5 TASKS.\n\n"
+        "BAD EXAMPLE: 'Review your diet plan'\n"
+        "GOOD EXAMPLE: 'Prep 3 high-protein meals for the next 24 hours'\n\n"
+        "Return ONLY a JSON array of 5 strings."
     )
 
 
-def generate_ai_tasks(*, goal_title: str, deadline_days: int) -> List[str]:
+def generate_ai_tasks(*, goal_title: str, deadline_days: int, category: Optional[str] = None) -> List[str]:
     """
     Generates actionable daily tasks for a specific goal.
     """
     api_key = _get_config_val("GROQ_API_KEY")
     if not api_key:
-        return _deterministic_tasks(goal_title)
+        return _deterministic_tasks(goal_title, category)
 
     try:
         from groq import Groq
@@ -300,7 +339,7 @@ def generate_ai_tasks(*, goal_title: str, deadline_days: int) -> List[str]:
         resp = client.chat.completions.create(
             model="llama-3.3-70b-versatile",
             temperature=0.4,
-            messages=[{"role": "user", "content": _build_task_prompt(goal_title, deadline_days)}],
+            messages=[{"role": "user", "content": _build_task_prompt(goal_title, deadline_days, category)}],
         )
         raw = (resp.choices[0].message.content or "").strip()
         if "```" in raw:
@@ -309,11 +348,11 @@ def generate_ai_tasks(*, goal_title: str, deadline_days: int) -> List[str]:
                 raw = raw[4:]
         parsed = json.loads(raw)
         if isinstance(parsed, list):
-            return [str(t).strip() for t in parsed[:6]]
-        return _deterministic_tasks(goal_title)
+            return [str(t).strip() for t in parsed[:5]]
+        return _deterministic_tasks(goal_title, category)
     except Exception as e:
         print(f"AI Task Gen Error: {e}")
-        return _deterministic_tasks(goal_title)
+        return _deterministic_tasks(goal_title, category)
 
 
 def get_ai_brief(*, user_id: int, goal_id: int, context: Dict[str, Any]) -> Dict[str, Any]:

@@ -420,3 +420,60 @@ def compute_full_analysis(log_rows: List[Dict[str, Any]], task_rows: List[Dict[s
         "scatter_friction": interpret_scatter(scatter_friction_raw, kind="friction"),
         "category_completion": interpret_category_completion(category_completion_raw),
     }
+
+def compute_streak(log_rows: List[Dict[str, Any]]) -> Dict[str, int]:
+    """
+    Compute current streak, longest streak, and total days logged.
+    Requires all historical logs for the user+goal, sorted chronologically.
+    """
+    if not log_rows:
+        return {"current_streak": 0, "longest_streak": 0, "total_days_logged": 0}
+
+    # Extract unique dates sorted ascending
+    dates = []
+    for r in log_rows:
+        d = str(r.get("log_date", ""))
+        dt = _parse_date(d)
+        if dt:
+            dates.append(dt.date())
+    
+    dates = sorted(list(set(dates)))
+    if not dates:
+        return {"current_streak": 0, "longest_streak": 0, "total_days_logged": 0}
+
+    total_days = len(dates)
+    
+    # Calculate longest streak
+    longest_streak = 1
+    current_calc_streak = 1
+    for i in range(1, len(dates)):
+        if (dates[i] - dates[i-1]).days == 1:
+            current_calc_streak += 1
+            if current_calc_streak > longest_streak:
+                longest_streak = current_calc_streak
+        else:
+            current_calc_streak = 1
+
+    # Calculate current streak backwards from the most recent log
+    # If the latest log is older than yesterday, the streak is broken.
+    if not dates:
+        return {"current_streak": 0, "longest_streak": 0, "total_days_logged": 0}
+        
+    latest_log = dates[-1]
+    today = datetime.now().date()
+    
+    if (today - latest_log).days > 1:
+        current_streak = 0
+    else:
+        current_streak = 0
+        cursor = latest_log
+        date_set = set(dates)
+        while cursor in date_set:
+            current_streak += 1
+            cursor -= timedelta(days=1)
+
+    return {
+        "current_streak": current_streak,
+        "longest_streak": longest_streak,
+        "total_days_logged": total_days
+    }
