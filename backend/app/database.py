@@ -161,14 +161,20 @@ def apply_migrations() -> None:
             # Simple SQL execution for migrations
             if _is_postgres():
                 # Translation layer for SQLite -> Postgres
+                import re
+                
+                # 1. Strip all PRAGMA lines entirely
+                sql = re.sub(r'(?i)PRAGMA\s+.*?;', '', sql)
+                
+                # 2. Convert SQLite specific syntax
                 sql = sql.replace("INTEGER PRIMARY KEY AUTOINCREMENT", "SERIAL PRIMARY KEY")
                 sql = sql.replace("DEFAULT (datetime('now'))", "DEFAULT CURRENT_TIMESTAMP")
                 
                 with conn.cursor() as cur:
-                    # Split into individual statements to handle PRAGMA and potential errors
+                    # Split into individual statements to handle any remaining empty space or errors
                     for statement in sql.split(";"):
                         stmt = statement.strip()
-                        if not stmt or stmt.upper().startswith("PRAGMA"):
+                        if not stmt:
                             continue
                         cur.execute(stmt)
                     cur.execute("INSERT INTO schema_migrations(version) VALUES (%s)", (version,))
