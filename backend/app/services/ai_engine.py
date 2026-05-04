@@ -309,18 +309,18 @@ def _deterministic_tasks(goal_title: str, category: Optional[str] = None) -> Lis
 def _build_task_prompt(goal_title: str, deadline_days: int, category: Optional[str] = None) -> str:
     cat_context = f"This is a {category} goal." if category else ""
     return (
-        "You are a HIGH-PERFORMANCE STRATEGIST. Your goal is to provide specific, elite-level execution steps.\n"
+        "You are a Practical Performance Coach. Your goal is to provide 5 simple, actionable steps for today.\n"
         f"Target Goal: {goal_title}\n"
         f"{cat_context}\n"
         f"Remaining Timeline: {deadline_days} days.\n\n"
         "STRICT EXECUTION RULES:\n"
-        "1. NO GENERIC VERBS: Do not use 'Review', 'Plan', 'Check', 'Study', 'Analyze', 'Session', 'Manage'.\n"
-        "2. NO VAGUE NOUNS: Do not use 'Progress', 'Documentation', 'Resources', 'Basics'.\n"
-        "3. PHYSICAL & CONCRETE: Every task must be a physical action with a measurable outcome.\n"
-        "4. NO MOTIVATION: Use professional, technical, and analytical language.\n"
+        "1. NO JARGON: Use simple, everyday language that anyone can understand.\n"
+        "2. PRACTICAL & ACTIONABLE: Every task must be something you can physically do in under 30 minutes.\n"
+        "3. RELATED TO GOAL: Ensure tasks directly help the user move toward their specific target.\n"
+        "4. HUMAN TONE: Talk like a supportive coach, not a machine or a technical analyst.\n"
         "5. EXACTLY 5 TASKS.\n\n"
-        "BAD EXAMPLE: 'Review your diet plan'\n"
-        "GOOD EXAMPLE: 'Prep 3 high-protein meals for the next 24 hours'\n\n"
+        "EXAMPLE FOR FITNESS: 'Pack your gym bag and put it by the door for tomorrow morning'\n"
+        "EXAMPLE FOR CODING: 'Watch one 10-minute tutorial on a feature you want to build'\n\n"
         "Return ONLY a JSON array of 5 strings."
     )
 

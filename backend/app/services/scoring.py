@@ -36,12 +36,12 @@ def compute_performance_score(inp: ScoreInputs) -> float:
     friction = max(int(inp.friction_count or 0), 0)
 
     # Weighted components (0..1 each)
-    # Primary is now CRITICAL. If not done, score is capped.
-    primary_score = 1.0 if bool(inp.primary_done) else 0.2 
+    # Primary is now CRITICAL. If not done, that 50-90% of the score is 0.
+    primary_score = 1.0 if bool(inp.primary_done) else 0.0 
     
-    support_score = (support_done / support_total) if support_total > 0 else 1.0
-    optimize_score = (optimize_done / optimize_total) if optimize_total > 0 else 1.0
-    custom_score = (custom_done / custom_total) if custom_total > 0 else 1.0
+    support_score = (support_done / support_total) if support_total > 0 else 0.0
+    optimize_score = (optimize_done / optimize_total) if optimize_total > 0 else 0.0
+    custom_score = (custom_done / custom_total) if custom_total > 0 else 0.0
     focus_score = focus / 5.0
 
     # Dynamic Weights: Only weight components that actually have tasks.
