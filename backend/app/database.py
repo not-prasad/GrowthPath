@@ -56,7 +56,11 @@ def init_db() -> None:
 
 def _prepare_sql(sql: str) -> str:
     if _is_postgres():
-        return sql.replace("?", "%s")
+        # 1. Translate parameter markers
+        sql = sql.replace("?", "%s")
+        # 2. Translate SQLite date functions to Postgres
+        sql = sql.replace("datetime('now')", "CURRENT_TIMESTAMP")
+        sql = sql.replace("DATETIME('now')", "CURRENT_TIMESTAMP")
     return sql
 
 
