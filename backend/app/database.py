@@ -58,9 +58,11 @@ def _prepare_sql(sql: str) -> str:
     if _is_postgres():
         # 1. Translate parameter markers
         sql = sql.replace("?", "%s")
-        # 2. Translate SQLite date functions to Postgres
-        sql = sql.replace("datetime('now')", "CURRENT_TIMESTAMP")
-        sql = sql.replace("DATETIME('now')", "CURRENT_TIMESTAMP")
+        # 2. Translate SQLite date functions to Postgres-friendly string format
+        # This allows comparing TEXT columns (like expires_at) with the current time
+        postgres_now = "to_char(CURRENT_TIMESTAMP AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS')"
+        sql = sql.replace("datetime('now')", postgres_now)
+        sql = sql.replace("DATETIME('now')", postgres_now)
     return sql
 
 
