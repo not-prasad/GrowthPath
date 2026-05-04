@@ -41,7 +41,7 @@ CREATE TABLE IF NOT EXISTS daily_logs (
   energy_state        TEXT NOT NULL DEFAULT 'Stable', -- High|Stable|Low
   friction_count      INTEGER NOT NULL DEFAULT 0,
 
-  performance_score   REAL NOT NULL DEFAULT 40.0,
+  performance_score   REAL NOT NULL DEFAULT 0.0,
   xp_gained           INTEGER NOT NULL DEFAULT 0,
 
   mood                TEXT,
