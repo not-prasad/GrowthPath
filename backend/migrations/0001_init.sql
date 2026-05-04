@@ -9,8 +9,7 @@ CREATE TABLE IF NOT EXISTS users (
   total_xp          INTEGER NOT NULL DEFAULT 0,
   level             INTEGER NOT NULL DEFAULT 1,
   created_at        TEXT NOT NULL DEFAULT (datetime('now')),
-  updated_at        TEXT NOT NULL DEFAULT (datetime('now')),
-  FOREIGN KEY(active_goal_id) REFERENCES goals(id) ON DELETE SET NULL
+  updated_at        TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
 -- Goals
@@ -85,4 +84,7 @@ CREATE TABLE IF NOT EXISTS daily_tasks (
 
 CREATE INDEX IF NOT EXISTS idx_tasks_log_date ON daily_tasks(user_id, goal_id, log_date);
 CREATE INDEX IF NOT EXISTS idx_tasks_log_type ON daily_tasks(log_id, task_type, is_completed);
+
+-- Add circular reference (Postgres only)
+-- POSTGRES_ONLY: ALTER TABLE users ADD CONSTRAINT fk_active_goal FOREIGN KEY(active_goal_id) REFERENCES goals(id) ON DELETE SET NULL;
 

@@ -176,6 +176,14 @@ def apply_migrations() -> None:
                         stmt = statement.strip()
                         if not stmt:
                             continue
+                        
+                        # Handle Postgres-only special commands
+                        if "-- POSTGRES_ONLY:" in stmt:
+                            if _is_postgres():
+                                stmt = stmt.replace("-- POSTGRES_ONLY:", "").strip()
+                            else:
+                                continue
+                                
                         cur.execute(stmt)
                     cur.execute("INSERT INTO schema_migrations(version) VALUES (%s)", (version,))
             else:
