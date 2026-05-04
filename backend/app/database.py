@@ -160,8 +160,17 @@ def apply_migrations() -> None:
             
             # Simple SQL execution for migrations
             if _is_postgres():
+                # Translation layer for SQLite -> Postgres
+                sql = sql.replace("INTEGER PRIMARY KEY AUTOINCREMENT", "SERIAL PRIMARY KEY")
+                sql = sql.replace("DEFAULT (datetime('now'))", "DEFAULT CURRENT_TIMESTAMP")
+                
                 with conn.cursor() as cur:
-                    cur.execute(sql)
+                    # Split into individual statements to handle PRAGMA and potential errors
+                    for statement in sql.split(";"):
+                        stmt = statement.strip()
+                        if not stmt or stmt.upper().startswith("PRAGMA"):
+                            continue
+                        cur.execute(stmt)
                     cur.execute("INSERT INTO schema_migrations(version) VALUES (%s)", (version,))
             else:
                 conn.executescript(sql)
