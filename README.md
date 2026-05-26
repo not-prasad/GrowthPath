@@ -70,11 +70,12 @@ This project is structured for a clean deployment using a Flask backend and a Vi
 
 ## 🤝 Credits
 
-This project was a high-intensity collaboration between:
-- **Lead Developer**: [@notprasad](https://github.com/notprasad) — Vision, UI Design, and Product Strategy.
-- **System Architect**: **Antigravity AI (Google Deepmind)** — Backend Logic, AI Integration, and Performance Optimization.
+This project was developed as part of my internship project at DATAMINES INDIA, Pune.
 
-Together, we evolved this from a simple tracker into a comprehensive **Performance Lab**.
+* **Developer:** [@notprasad](https://github.com/notprasad) — Full-Stack Development, UI Design, AI Integration, and System Architecture.
+
+
+This project evolved from a simple productivity tracker into a comprehensive AI-powered personal growth and performance coaching platform.
 
 ## 🏁 License
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
