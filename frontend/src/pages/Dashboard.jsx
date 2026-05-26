@@ -11,7 +11,7 @@ import {
 } from 'recharts';
 import DashboardLayout from '../components/DashboardLayout';
 import { useAuth } from '../context/AuthContext';
-import { API_BASE, authHeaders, safeJson } from '../api/base';
+import { API_BASE, authHeaders, safeJson, getTodayDate } from '../api/base';
 
 function Dashboard() {
   const [goal, setGoal] = useState(null);
@@ -75,7 +75,7 @@ function Dashboard() {
         const [trendsRes, logsRes, streakRes] = await Promise.all([
           fetch(`${API_BASE}/performance/trends?goal_id=${currentGoal.id}&days=7`, { headers }),
           fetch(`${API_BASE}/logs?goal_id=${currentGoal.id}&limit=60`, { headers }),
-          fetch(`${API_BASE}/analytics/streak?goal_id=${currentGoal.id}`, { headers })
+          fetch(`${API_BASE}/analytics/streak?goal_id=${currentGoal.id}&today_date=${getTodayDate()}`, { headers })
         ]);
 
         if (trendsRes.ok) { const t = await safeJson(trendsRes); console.log('[Dashboard] /api/performance/trends response:', t); setTrends(t?.trends || null); }
@@ -142,7 +142,7 @@ function Dashboard() {
 
   const streak = streakData?.current_streak || 0;
 
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayStr = getTodayDate();
   const todayData = days.find(d => d.date?.startsWith(todayStr));
   const loggedToday = !!todayData;
   const todayTasks = todayData?.tasks || [];

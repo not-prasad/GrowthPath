@@ -7,11 +7,13 @@ from typing import Any, Dict, Optional
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import get_jwt_identity, jwt_required
 
+import json
 from ..database import execute, query_one, query_all
 from ..utils.errors import ApiError
 from ..utils.validation import as_bool, as_date_yyyy_mm_dd, as_enum, as_str, require_json
 from .logs import _resolve_goal_id, recalculate_log_stats
 from ..services.ai_engine import generate_ai_tasks
+from ..services.youtube import fetch_youtube_tutorial
 
 
 bp = Blueprint("tasks", __name__, url_prefix="/api")
@@ -127,33 +129,77 @@ def generate_tasks():
     goal_id = _resolve_goal_id(user_id, str(data.get("goal_id")) if data.get("goal_id") is not None else None)
     log_date = as_date_yyyy_mm_dd(data.get("log_date"), field="log_date")
 
-    goal = query_one("SELECT title, category, deadline_days FROM goals WHERE id=? AND user_id=?", (goal_id, user_id))
+    goal = query_one("SELECT id, title, category, deadline_days, difficulty, commitment, motivation, created_at FROM goals WHERE id=? AND user_id=?", (goal_id, user_id))
     if not goal:
         raise ApiError("not_found", "Goal not found.", 404)
 
+    # Calculate day number
+    try:
+        created_dt = datetime.strptime(goal["created_at"][:10], "%Y-%m-%d").date()
+        day_number = max(1, (log_date - created_dt).days + 1)
+    except Exception:
+        day_number = 1
+
+    # Calculate consistency (past 3 days)
+    past_logs = query_all("SELECT id FROM daily_logs WHERE user_id=? AND goal_id=? ORDER BY log_date DESC LIMIT 3", (user_id, goal_id))
+    consistency_score = 1.0
+    if past_logs:
+        log_ids = tuple([l["id"] for l in past_logs])
+        placeholders = ",".join(["?"] * len(log_ids))
+        total_tasks = query_one(f"SELECT COUNT(*) as c FROM daily_tasks WHERE log_id IN ({placeholders})", log_ids)
+        completed_tasks = query_one(f"SELECT COUNT(*) as c FROM daily_tasks WHERE log_id IN ({placeholders}) AND is_completed=1", log_ids)
+        
+        tc = total_tasks["c"] if total_tasks else 0
+        cc = completed_tasks["c"] if completed_tasks else 0
+        if tc > 0:
+            consistency_score = cc / tc
+        else:
+            # They haven't had any tasks yet, give them benefit of the doubt
+            consistency_score = 1.0
+
     # Generate tasks via AI
-    task_titles = generate_ai_tasks(
+    generated_tasks = generate_ai_tasks(
         goal_title=goal["title"],
         deadline_days=goal["deadline_days"],
-        category=goal.get("category")
+        day_number=day_number,
+        consistency_score=consistency_score,
+        category=goal.get("category"),
+        difficulty=goal.get("difficulty"),
+        commitment=goal.get("commitment"),
+        motivation=goal.get("motivation")
     )
 
     log_id = _ensure_log(user_id, goal_id, log_date)
     created_tasks = []
 
-    for title in task_titles:
+    for t_obj in generated_tasks:
+        title = t_obj.get("title", "")
+        if not title:
+            continue
+            
         key = _dedupe_key("optimize", title)
         # Check if already exists to avoid duplicates on re-gen
         existing = query_one("SELECT id FROM daily_tasks WHERE log_id=? AND dedupe_key=?", (log_id, key))
         if existing:
             continue
 
+        yt_query = t_obj.get("youtube_search_query")
+        tutorial_data = fetch_youtube_tutorial(yt_query) if yt_query else None
+        
+        details_dict = {
+            "description": t_obj.get("description"),
+            "estimated_time": t_obj.get("estimated_time"),
+            "difficulty": t_obj.get("difficulty"),
+            "tutorial": tutorial_data
+        }
+        details_json = json.dumps(details_dict)
+
         tid = execute(
             """
-            INSERT INTO daily_tasks(user_id, goal_id, log_id, log_date, task_type, title, is_completed, dedupe_key)
-            VALUES (?,?,?,?,?,?,?,?)
+            INSERT INTO daily_tasks(user_id, goal_id, log_id, log_date, task_type, title, details, is_completed, dedupe_key)
+            VALUES (?,?,?,?,?,?,?,?,?)
             """,
-            (user_id, goal_id, log_id, log_date, "optimize", title, 0, key)
+            (user_id, goal_id, log_id, log_date, "optimize", title, details_json, 0, key)
         )
         created_tasks.append(tid)
 

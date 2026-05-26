@@ -33,9 +33,27 @@ function Goals() {
     fetchGoals();
   }, [token]);
 
-  const switchGoal = (id) => {
-    localStorage.setItem('growthpath_goal_id', String(id));
-    navigate('/dashboard');
+  const switchGoal = async (id) => {
+    try {
+      const res = await fetch(`${API_BASE}/goals/active`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          ...authHeaders(token)
+        },
+        body: JSON.stringify({ goal_id: id })
+      });
+      if (res.ok) {
+        localStorage.setItem('growthpath_goal_id', String(id));
+        navigate('/dashboard');
+      } else {
+        const data = await safeJson(res);
+        alert(data?.error?.message || 'Failed to switch goal.');
+      }
+    } catch (err) {
+      console.error("Goal switch error:", err);
+      alert('Error connecting to backend.');
+    }
   };
 
   const activeGoals = goals.filter(g => g.status === 'active');

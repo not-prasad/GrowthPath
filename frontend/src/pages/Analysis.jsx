@@ -13,7 +13,7 @@ import {
 import DashboardLayout from '../components/DashboardLayout';
 import Heatmap from '../components/Heatmap';
 import { useAuth } from '../context/AuthContext';
-import { API_BASE, authHeaders, safeJson } from '../api/base';
+import { API_BASE, authHeaders, safeJson, getTodayDate } from '../api/base';
 
 // Simple Calendar Component
 // Local ActivityCalendar deleted in favor of global Heatmap component
@@ -55,7 +55,7 @@ function Analysis() {
         const goalId = currentGoal.id;
         
         const [summaryRes, briefRes, logsRes] = await Promise.all([
-          fetch(`${API_BASE}/analytics/summary?goal_id=${goalId}`, { headers: h }),
+          fetch(`${API_BASE}/analytics/summary?goal_id=${goalId}&today_date=${getTodayDate()}`, { headers: h }),
           fetch(`${API_BASE}/ai/brief?goal_id=${goalId}`, { headers: h }),
           fetch(`${API_BASE}/logs?goal_id=${goalId}&limit=90`, { headers: h })
         ]);
@@ -178,7 +178,7 @@ function Analysis() {
           <section className="premium-section" style={{ display: 'flex', flexDirection: 'column' }}>
             <h3 style={{ fontSize: '1.1rem', fontWeight: 800, marginBottom: '0.5rem' }}>Score History</h3>
             <div style={{ flex: 1, minHeight: '250px' }}>
-              {historyData.length > 0 ? (
+              {historyData.length > 0 && !stats.line?.insufficient_data ? (
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={historyData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--panel-border)" />
@@ -199,7 +199,7 @@ function Analysis() {
           <section className="premium-section" style={{ display: 'flex', flexDirection: 'column' }}>
             <h3 style={{ fontSize: '1.1rem', fontWeight: 800, marginBottom: '0.5rem' }}>Category Completion</h3>
             <div style={{ flex: 1, minHeight: '250px' }}>
-              {categoryData.length > 0 ? (
+              {categoryData.length > 0 && !stats.category_completion?.insufficient_data ? (
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={categoryData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--panel-border)" />
@@ -224,7 +224,7 @@ function Analysis() {
           <section className="premium-section" style={{ display: 'flex', flexDirection: 'column' }}>
             <h3 style={{ fontSize: '1.1rem', fontWeight: 800, marginBottom: '0.5rem' }}>Weekday Analysis</h3>
             <div style={{ flex: 1, minHeight: '250px' }}>
-              {weekdayData.length > 0 ? (
+              {weekdayData.length > 0 && !stats.weekday?.insufficient_data ? (
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={weekdayData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--panel-border)" />
@@ -245,7 +245,7 @@ function Analysis() {
           <section className="premium-section" style={{ display: 'flex', flexDirection: 'column' }}>
             <h3 style={{ fontSize: '1.1rem', fontWeight: 800, marginBottom: '0.5rem' }}>Focus vs Score</h3>
             <div style={{ flex: 1, minHeight: '250px' }}>
-              {focusData.length > 0 ? (
+              {focusData.length > 0 && !stats.scatter_focus?.insufficient_data ? (
                 <ResponsiveContainer width="100%" height="100%">
                   <ScatterChart margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="var(--panel-border)" />

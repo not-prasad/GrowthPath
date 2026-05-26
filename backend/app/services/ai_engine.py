@@ -2,8 +2,21 @@ from __future__ import annotations
 
 import json
 import hashlib
+import re
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
+
+
+def _sanitize_task_title(title: str) -> str:
+    """Strip URLs, tutorial references, and parenthetical link noise from task titles."""
+    # Remove URLs (http/https/www)
+    title = re.sub(r'https?://\S+', '', title)
+    title = re.sub(r'www\.\S+', '', title)
+    # Remove patterns like "(Tutorial: ...)" or "[Tutorial: ...]"
+    title = re.sub(r'\s*[\(\[]\s*[Tt]utorial\s*[:;]?\s*[^\)\]]*[\)\]]', '', title)
+    # Remove trailing/leading whitespace and punctuation artifacts
+    title = re.sub(r'\s{2,}', ' ', title).strip().rstrip('()[] ')
+    return title
 
 from flask import current_app
 try:
@@ -127,9 +140,8 @@ def get_ai_insights(*, goal_title: str, trends: Dict[str, Any], recent_days: Lis
             messages=[{"role": "user", "content": prompt}],
         )
         
-        raw = (resp.choices[0].message.content or "").strip()
-        # Bug Fix: Use more robust JSON extraction (regex-like)
         import re
+        # More robust JSON extraction: find first [ and last ]
         json_match = re.search(r'\[\s*\{.*\}\s*\]', raw, re.DOTALL)
         if json_match:
             raw = json_match.group(0)
@@ -269,65 +281,110 @@ def _call_groq(prompt: str) -> Optional[Dict[str, Any]]:
         return None
 
 
-def _deterministic_tasks(goal_title: str, category: Optional[str] = None) -> List[str]:
+def _deterministic_tasks(goal_title: str, category: Optional[str] = None) -> List[Dict[str, Any]]:
     cat_and_title = f"{(category or '')} {goal_title}".lower()
     
-    if any(kw in cat_and_title for kw in ["health", "fitness", "weight", "diet", "gym", "workout"]):
+    def _t(t, d, time, diff, yt):
+        return {"title": t, "description": d, "estimated_time": time, "difficulty": diff, "youtube_search_query": yt}
+        
+    # 1. Tech / Coding
+    if any(kw in cat_and_title for kw in ["code", "software", "dev", "program", "app", "react", "python", "javascript", "ts"]):
         return [
-            "Complete 45m zone-2 cardio session",
-            "Log all macronutrients for today",
-            "Perform 3 sets of compound lifts",
-            "Consume 3 liters of water",
-            "Walk 12,000 steps"
-        ]
-    if any(kw in cat_and_title for kw in ["code", "software", "dev", "program", "app"]):
-        return [
-            "Implement one new backend endpoint",
-            "Write 5 comprehensive unit tests",
-            "Refactor one complex function",
-            "Document 2 API endpoints",
-            "Fix one open bug from the tracker"
-        ]
-    if any(kw in cat_and_title for kw in ["data", "analyt", "sql", "model"]):
-        return [
-            "Clean and validate 100+ rows of raw data",
-            "Execute 3 exploratory data queries",
-            "Update one visualization dashboard",
-            "Identify 2 key statistical correlations",
-            "Document data cleaning steps"
+            _t(f"Set up local development environment for {goal_title}", "Install necessary tools and SDKs.", "30m", "Easy", "how to setup development environment programming"),
+            _t("Review foundational prerequisites and syntax", "Skim the basic language docs.", "45m", "Easy", "programming syntax basics for beginners"),
+            _t("Initialize primary project repository", "Create git repo and scaffold.", "15m", "Easy", "how to initialize git repository and project scaffold"),
+            _t("Complete first module of core documentation", "Read through the main getting started guide.", "60m", "Medium", "reading technical documentation tips"),
+            _t("Execute one small code implementation test", "Write a hello world or simple function.", "30m", "Medium", "coding simple test function beginner")
         ]
     
+    # 2. Fitness / Health
+    if any(kw in cat_and_title for kw in ["health", "fitness", "weight", "diet", "gym", "workout", "run"]):
+        return [
+            _t("Conduct baseline physical assessment", "Weigh in, take photos, test baseline reps.", "20m", "Easy", "how to do a beginner fitness assessment"),
+            _t("Finalize weekly nutrition and hydration plan", "Plan your meals and water intake.", "30m", "Easy", "beginner weekly meal prep and hydration"),
+            _t("Prepare environment (gear, bag, space)", "Set out clothes and clear workout space.", "10m", "Easy", "how to prepare for morning workout"),
+            _t("Execute 30m foundational movement session", "Light cardio and bodyweight movements.", "30m", "Medium", "30 minute beginner full body workout"),
+            _t("Log recovery and energy metrics", "Note how you feel after day 1.", "5m", "Easy", "how to track fitness recovery metrics")
+        ]
+
+    # 3. Data / SQL
+    if any(kw in cat_and_title for kw in ["data", "analyt", "sql", "model", "database"]):
+        return [
+            _t("Clean and validate initial raw dataset", "Remove nulls and check formats.", "45m", "Medium", "beginner data cleaning tutorial"),
+            _t("Execute exploratory data queries", "Run simple SELECT and GROUP BY queries.", "45m", "Medium", "SQL exploratory data analysis basics"),
+            _t("Update primary visualization dashboard", "Add one new chart.", "30m", "Medium", "beginner data visualization dashboard tutorial"),
+            _t("Identify statistical correlations in data", "Look for variables that move together.", "60m", "Hard", "how to find correlations in data beginner"),
+            _t("Document data processing steps", "Write down what you did.", "15m", "Easy", "how to document data analysis workflow")
+        ]
+    
+    # Default High-Performance Fallback
     return [
-        f"Execute primary high-leverage action for {goal_title}",
-        "Remove one physical friction point from environment",
-        "Log all supporting performance variables",
-        "Complete 25m deep focus sprint",
-        "Finalize top-priority target for tomorrow"
+        _t(f"Execute primary high-leverage action for {goal_title}", "Do the most important thing.", "60m", "Medium", "how to focus on high leverage tasks"),
+        _t("Identify and remove one physical friction point", "Clean desk or remove distraction.", "15m", "Easy", "how to optimize environment for productivity"),
+        _t("Log all supporting performance variables", "Update your tracker.", "5m", "Easy", "habit tracking for beginners"),
+        _t("Complete 25m deep focus sprint", "Use pomodoro technique.", "25m", "Medium", "pomodoro technique 25 minutes"),
+        _t("Finalize top-priority target for tomorrow", "Plan ahead.", "10m", "Easy", "how to plan your day effectively")
     ]
 
 
-def _build_task_prompt(goal_title: str, deadline_days: int, category: Optional[str] = None) -> str:
-    cat_context = f"This is a {category} goal." if category else ""
+def _build_task_prompt(
+    goal_title: str, 
+    deadline_days: int, 
+    day_number: int = 1,
+    consistency_score: float = 1.0,
+    category: Optional[str] = None,
+    difficulty: Optional[str] = "Medium",
+    commitment: Optional[str] = "Balanced",
+    motivation: Optional[str] = ""
+) -> str:
     return (
-        "You are a Practical Performance Coach. Your goal is to provide 5 simple, actionable steps for today.\n"
-        f"Target Goal: {goal_title}\n"
-        f"{cat_context}\n"
-        f"Remaining Timeline: {deadline_days} days.\n\n"
-        "STRICT EXECUTION RULES:\n"
-        "1. NO JARGON: Use simple, everyday language that anyone can understand.\n"
-        "2. PRACTICAL & ACTIONABLE: Every task must be something you can physically do in under 30 minutes.\n"
-        "3. RELATED TO GOAL: Ensure tasks directly help the user move toward their specific target.\n"
-        "4. HUMAN TONE: Talk like a supportive coach, not a machine or a technical analyst.\n"
-        "5. EXACTLY 5 TASKS.\n\n"
-        "EXAMPLE FOR FITNESS: 'Pack your gym bag and put it by the door for tomorrow morning'\n"
-        "EXAMPLE FOR CODING: 'Watch one 10-minute tutorial on a feature you want to build'\n\n"
-        "Return ONLY a JSON array of 5 strings."
+        "You are an intelligent, empathetic personal coach.\n\n"
+        f"User Goal: \"{goal_title}\"\n"
+        f"Timeline: {deadline_days} days\n"
+        f"Current Progress: Day {day_number} of {deadline_days}\n"
+        f"Recent Consistency: {int(consistency_score * 100)}%\n"
+        f"User Preference - Difficulty: {difficulty}\n"
+        f"User Preference - Daily Time: {commitment}\n"
+        f"Strategic Context: \"{motivation}\"\n\n"
+        "Your job is to generate 5 highly realistic, practical, and concrete tasks for TODAY that directly help achieve the goal.\n\n"
+        "STRICT COACHING RULES:\n"
+        "- Tasks MUST be realistic and beginner-friendly if early in the timeline (Day 1-5).\n"
+        "- Progressive Overload: Slowly increase difficulty over time. Do not give advanced tasks on Day 1.\n"
+        "- Adapt to Consistency: If consistency is low (< 50%), make tasks EASIER to build momentum. If high, push them slightly.\n"
+        "- No generic productivity tasks (e.g. 'plan the day'). Keep it specific to the goal.\n"
+        "- NEVER include URLs, links, or tutorial references in task titles.\n\n"
+        "YOUTUBE SEARCH QUERY RULE:\n"
+        "- Generate a smart 'youtube_search_query' for each task.\n"
+        "- DO NOT just use the task title.\n"
+        "- Use broad, highly-searched terms that will find a good tutorial (e.g. instead of 'execute foundational movement', use '15 minute beginner full body workout').\n\n"
+        "OUTPUT FORMAT:\n"
+        "Return ONLY a JSON array of objects with the exact keys: title, description, estimated_time, difficulty, youtube_search_query.\n"
+        "Example:\n"
+        "[\n"
+        "  {\n"
+        "    \"title\": \"Do a 15-minute beginner workout\",\n"
+        "    \"description\": \"Start with light movements to get blood flowing.\",\n"
+        "    \"estimated_time\": \"15m\",\n"
+        "    \"difficulty\": \"Easy\",\n"
+        "    \"youtube_search_query\": \"15 minute beginner full body workout no equipment\"\n"
+        "  }\n"
+        "]\n"
     )
 
 
-def generate_ai_tasks(*, goal_title: str, deadline_days: int, category: Optional[str] = None) -> List[str]:
+def generate_ai_tasks(
+    *, 
+    goal_title: str, 
+    deadline_days: int, 
+    day_number: int = 1,
+    consistency_score: float = 1.0,
+    category: Optional[str] = None,
+    difficulty: Optional[str] = "Medium",
+    commitment: Optional[str] = "Balanced",
+    motivation: Optional[str] = ""
+) -> List[Dict[str, Any]]:
     """
-    Generates actionable daily tasks for a specific goal.
+    Generates actionable daily tasks for a specific goal using progressive coaching logic.
     """
     api_key = _get_config_val("GROQ_API_KEY")
     if not api_key:
@@ -339,7 +396,16 @@ def generate_ai_tasks(*, goal_title: str, deadline_days: int, category: Optional
         resp = client.chat.completions.create(
             model="llama-3.3-70b-versatile",
             temperature=0.4,
-            messages=[{"role": "user", "content": _build_task_prompt(goal_title, deadline_days, category)}],
+            messages=[{"role": "user", "content": _build_task_prompt(
+                goal_title=goal_title,
+                deadline_days=deadline_days,
+                day_number=day_number,
+                consistency_score=consistency_score,
+                category=category,
+                difficulty=difficulty,
+                commitment=commitment,
+                motivation=motivation
+            )}],
         )
         raw = (resp.choices[0].message.content or "").strip()
         if "```" in raw:
@@ -348,7 +414,13 @@ def generate_ai_tasks(*, goal_title: str, deadline_days: int, category: Optional
                 raw = raw[4:]
         parsed = json.loads(raw)
         if isinstance(parsed, list):
-            return [str(t).strip() for t in parsed[:5]]
+            res = []
+            for t in parsed[:5]:
+                if isinstance(t, dict) and "title" in t:
+                    t["title"] = _sanitize_task_title(str(t["title"]).strip())
+                    res.append(t)
+            if res:
+                return res
         return _deterministic_tasks(goal_title, category)
     except Exception as e:
         print(f"AI Task Gen Error: {e}")

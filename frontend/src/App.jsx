@@ -38,7 +38,6 @@ function App() {
             <Route path="/setup" element={<PrivateRoute><Setup /></PrivateRoute>} />
             <Route path="/dashboard" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
             <Route path="/log" element={<PrivateRoute><PerformanceInput /></PrivateRoute>} />
-            <Route path="/checkin" element={<Navigate to="/log" />} />
             <Route path="/analysis" element={<PrivateRoute><Analysis /></PrivateRoute>} />
             <Route path="/history" element={<PrivateRoute><History /></PrivateRoute>} />
             <Route path="/ai-plan" element={<PrivateRoute><AIPlan /></PrivateRoute>} />

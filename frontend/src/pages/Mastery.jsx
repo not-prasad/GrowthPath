@@ -7,7 +7,7 @@ import {
 import DashboardLayout from '../components/DashboardLayout';
 import MilestonesBadge from '../components/MilestonesBadge';
 import { useAuth } from '../context/AuthContext';
-import { API_BASE, authHeaders, safeJson } from '../api/base';
+import { API_BASE, authHeaders, safeJson, getTodayDate } from '../api/base';
 
 const TIERS = [
   { level: 1,  title: 'Beginner',           color: '#94a3b8', gradient: 'linear-gradient(135deg, #64748b 0%, #94a3b8 100%)' },
@@ -59,7 +59,7 @@ function Mastery() {
           localStorage.setItem('growthpath_goal_id', String(selected.id));
           const [daysRes, streakRes] = await Promise.all([
             fetch(`${API_BASE}/logs?goal_id=${selected.id}`, { headers }),
-            fetch(`${API_BASE}/analytics/streak?goal_id=${selected.id}`, { headers })
+            fetch(`${API_BASE}/analytics/streak?goal_id=${selected.id}&today_date=${getTodayDate()}`, { headers })
           ]);
           if (daysRes.ok) {
             const payload = await safeJson(daysRes);
@@ -109,7 +109,6 @@ function Mastery() {
   };
 
   const currentTier = getTier(profile.level);
-  const nextTiers = TIERS.filter(t => t.level > profile.level).slice(0, 3);
   
   // SYNC WITH BACKEND: Level = floor(sqrt(XP / 100)) + 1
   // Therefore: XP for Level L = (L-1)^2 * 100
@@ -131,7 +130,7 @@ function Mastery() {
           <p className="premium-subtitle">Your rank is based on how consistent you are with your daily goals and tasks.</p>
         </header>
 
-        <div className="premium-grid-two" style={{ gridTemplateColumns: 'minmax(0, 1.3fr) minmax(0, 0.7fr)' }}>
+        <div className="premium-grid-two" style={{ gridTemplateColumns: 'minmax(0, 1.2fr) minmax(0, 0.8fr)' }}>
           {/* HERO RANK CARD */}
           <section className="premium-section" style={{ 
             position: 'relative', 
@@ -220,32 +219,53 @@ function Mastery() {
           </section>
 
           {/* NEXT MILESTONES */}
-          <section className="premium-section">
-            <h3 className="premium-mini-title"><TrendingUp size={18} className="text-secondary" /> Roadmap</h3>
+          <section className="premium-section" style={{ maxHeight: '500px', overflowY: 'auto' }}>
+            <h3 className="premium-mini-title"><TrendingUp size={18} className="text-secondary" /> Mastery Roadmap</h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', position: 'relative', marginTop: '1.5rem' }}>
               <div style={{ position: 'absolute', left: '15px', top: '24px', bottom: '24px', width: '2px', background: 'var(--panel-border)', borderStyle: 'dashed' }}></div>
               
-              <div style={{ position: 'relative', display: 'flex', gap: '1rem', alignItems: 'center' }}>
-                <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: 'var(--accent-subtle)', border: '2px solid var(--accent-primary)', color: 'var(--accent-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1 }}>
-                  <CheckCircle size={16} />
-                </div>
-                <div>
-                  <p style={{ fontSize: '0.65rem', fontWeight: 700, color: 'var(--accent-primary)', textTransform: 'uppercase' }}>Current</p>
-                  <p style={{ fontWeight: 700, fontSize: '0.9rem' }}>{currentTier.title}</p>
-                </div>
-              </div>
-
-              {nextTiers.map((tier, idx) => (
-                <div key={idx} style={{ position: 'relative', display: 'flex', gap: '1rem', alignItems: 'center' }}>
-                  <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: 'var(--bg-color)', border: `2px solid ${tier.color}`, color: tier.color, display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1 }}>
-                    <Shield size={16} />
-                  </div>
-                  <div>
-                    <p style={{ fontSize: '0.65rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Unlock Lvl {tier.level}</p>
-                    <p style={{ fontWeight: 700, fontSize: '0.9rem' }}>{tier.title}</p>
-                  </div>
-                </div>
-              ))}
+              {TIERS.map((tier, idx) => {
+                const isCurrent = tier.level === currentTier.level;
+                const isCompleted = tier.level < currentTier.level;
+                
+                if (isCompleted) {
+                  return (
+                    <div key={idx} style={{ position: 'relative', display: 'flex', gap: '1rem', alignItems: 'center', opacity: 0.65 }}>
+                      <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: 'rgba(16, 185, 129, 0.1)', border: '2px solid var(--success)', color: 'var(--success)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1 }}>
+                        <CheckCircle size={16} />
+                      </div>
+                      <div>
+                        <p style={{ fontSize: '0.65rem', fontWeight: 700, color: 'var(--success)', textTransform: 'uppercase' }}>Completed</p>
+                        <p style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--text-muted)' }}>{tier.title} (Lvl {tier.level})</p>
+                      </div>
+                    </div>
+                  );
+                } else if (isCurrent) {
+                  return (
+                    <div key={idx} style={{ position: 'relative', display: 'flex', gap: '1rem', alignItems: 'center' }}>
+                      <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: 'var(--accent-subtle)', border: '2px solid var(--accent-primary)', color: 'var(--accent-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1 }}>
+                        <Medal size={16} />
+                      </div>
+                      <div>
+                        <p style={{ fontSize: '0.65rem', fontWeight: 700, color: 'var(--accent-primary)', textTransform: 'uppercase' }}>Current Rank</p>
+                        <p style={{ fontWeight: 800, fontSize: '0.95rem', color: 'var(--text-primary)' }}>{tier.title} (Lvl {tier.level})</p>
+                      </div>
+                    </div>
+                  );
+                } else {
+                  return (
+                    <div key={idx} style={{ position: 'relative', display: 'flex', gap: '1rem', alignItems: 'center' }}>
+                      <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: 'var(--bg-color)', border: `2px solid ${tier.color}`, color: tier.color, display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1 }}>
+                        <Shield size={16} />
+                      </div>
+                      <div>
+                        <p style={{ fontSize: '0.65rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Unlock Lvl {tier.level}</p>
+                        <p style={{ fontWeight: 700, fontSize: '0.9rem' }}>{tier.title}</p>
+                      </div>
+                    </div>
+                  );
+                }
+              })}
             </div>
           </section>
         </div>

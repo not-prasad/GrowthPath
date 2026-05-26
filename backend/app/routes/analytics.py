@@ -4,7 +4,7 @@ from flask import Blueprint, jsonify, request, send_file, make_response
 from flask_jwt_extended import get_jwt_identity, jwt_required
 from fpdf import FPDF
 import io
-from datetime import datetime
+from datetime import datetime, timedelta
 import matplotlib.pyplot as plt
 import matplotlib
 matplotlib.use('Agg')
@@ -54,6 +54,48 @@ def performance_trends():
         (user_id, goal_id),
     )
     return jsonify({"goal_id": goal_id, "trends": compute_trends(rows, days=n)})
+
+
+@bp.get("/analytics/weeks")
+@jwt_required()
+def analytics_weeks():
+    """
+    Returns a list of start/end dates for weeks that have log data.
+    Format: [{ week_start: "YYYY-MM-DD", label: "Apr 27 - May 03" }]
+    """
+    user_id = int(get_jwt_identity())
+    goal_id = _resolve_goal_id(user_id, request.args.get("goal_id"))
+    
+    rows = query_all(
+        "SELECT log_date FROM daily_logs WHERE user_id=? AND goal_id=? ORDER BY log_date ASC",
+        (user_id, goal_id)
+    )
+    if not rows:
+        return jsonify([])
+
+    # Group into weeks (Mon-Sun)
+    weeks = []
+    seen_starts = set()
+    
+    for r in rows:
+        dt = datetime.strptime(r['log_date'], "%Y-%m-%d")
+        # Monday is 0, Sunday is 6
+        start_of_week = dt - timedelta(days=dt.weekday())
+        start_str = start_of_week.strftime("%Y-%m-%d")
+        
+        if start_str not in seen_starts:
+            end_of_week = start_of_week + timedelta(days=6)
+            end_str = end_of_week.strftime("%Y-%m-%d")
+            
+            label = f"{start_of_week.strftime('%b %d')} - {end_of_week.strftime('%b %d')}"
+            weeks.append({
+                "week_start": start_str,
+                "week_end": end_str,
+                "label": label
+            })
+            seen_starts.add(start_str)
+            
+    return jsonify(weeks[::-1]) # Most recent first
 
 
 def _load_logs(user_id: int, goal_id: int):
@@ -215,7 +257,7 @@ def analytics_streak():
     
     return jsonify({
         "goal_id": goal_id,
-        "streak": compute_streak(logs)
+        "streak": compute_streak(logs, today_date_str=request.args.get("today_date"))
     })
 
 @bp.get("/analytics/export/pdf")

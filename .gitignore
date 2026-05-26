@@ -34,3 +34,7 @@ Thumbs.db
 # Cursor IDE
 .cursor/
 .cursorrules
+
+# Scratch files
+scratch/
+

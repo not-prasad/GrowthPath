@@ -35,25 +35,12 @@ def create_habit():
         (user_id, goal_id, trigger, new_habit)
     )
     
-    # AWARD XP for setting up a habit (Psychological Reward)
-    u = query_one("SELECT total_xp, level FROM users WHERE id=?", (user_id,))
-    if u:
-        new_xp = (u['total_xp'] or 0) + 50
-        from ..services.scoring import compute_level
-        execute("UPDATE users SET total_xp=?, level=? WHERE id=?", (new_xp, compute_level(new_xp), user_id))
-    
-    # Get updated user stats to return to frontend
-    user_stats = query_one("SELECT total_xp, level FROM users WHERE id=?", (user_id,))
-    
     return jsonify({
         "habit": {
             "id": habit_id,
             "trigger_habit": trigger,
-            "new_habit": new_habit,
-            "xp_bonus": 50
-        },
-        "total_xp": user_stats["total_xp"],
-        "level": user_stats["level"]
+            "new_habit": new_habit
+        }
     }), 201
 
 @bp.delete("/habits/<int:habit_id>")

@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, ArrowRight, CheckCircle2, Zap, X, TrendingUp, TrendingDown, Minus, CheckCircle, Circle, Sparkles, Trash2 } from 'lucide-react';
+import { ArrowLeft, ArrowRight, CheckCircle2, Zap, X, TrendingUp, TrendingDown, Minus, CheckCircle, Circle, Sparkles, Trash2, PlayCircle } from 'lucide-react';
 import DashboardLayout from '../components/DashboardLayout';
 import { useAuth } from '../context/AuthContext';
-import { API_BASE, authHeaders, safeJson } from '../api/base';
+import { API_BASE, authHeaders, safeJson, getTodayDate } from '../api/base';
 
 const ENERGY_OPTIONS = [
   { id: 'High',   label: 'High',   desc: 'Feeling great and productive' },
@@ -61,7 +61,7 @@ export default function PerformanceInput() {
         localStorage.setItem('growthpath_goal_id', String(selected.id));
         setGoal(selected);
 
-        const today = new Date().toISOString().slice(0, 10);
+        const today = getTodayDate();
         const daysRes = await fetch(`${API_BASE}/logs?goal_id=${selected.id}&from=${today}&to=${today}&limit=1`, { headers });
         const payload = await safeJson(daysRes);
         const day = payload?.days?.[0];
@@ -106,6 +106,7 @@ export default function PerformanceInput() {
           friction_count,
           focus_level: focusLevel,
           notes,
+          is_submitted: true,
         }),
       });
       if (res.ok) {
@@ -115,7 +116,7 @@ export default function PerformanceInput() {
         }
         setResult(data);
         // Refresh today tasks to reflect any completion changes (if user edited them elsewhere)
-        const today = new Date().toISOString().slice(0, 10);
+        const today = getTodayDate();
         const daysRes = await fetch(`${API_BASE}/logs?goal_id=${goalId}&from=${today}&to=${today}&limit=1`, { headers: authHeaders(token) });
         const payload = await safeJson(daysRes);
         const day = payload?.days?.[0];
@@ -135,7 +136,7 @@ export default function PerformanceInput() {
     setGeneratingTasks(true);
     try {
       const goalId = localStorage.getItem('growthpath_goal_id');
-      const today = new Date().toISOString().slice(0, 10);
+      const today = getTodayDate();
       const res = await fetch(`${API_BASE}/tasks/generate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...authHeaders(token) },
@@ -157,7 +158,7 @@ export default function PerformanceInput() {
     setAddingTask(true);
     try {
       const goalId = localStorage.getItem('growthpath_goal_id');
-      const today = new Date().toISOString().slice(0, 10);
+      const today = getTodayDate();
       const res = await fetch(`${API_BASE}/tasks/custom`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...authHeaders(token) },
@@ -200,7 +201,7 @@ export default function PerformanceInput() {
       }
       
       const goalId = localStorage.getItem('growthpath_goal_id');
-      const today = new Date().toISOString().slice(0, 10);
+      const today = getTodayDate();
       const todayRes = await fetch(`${API_BASE}/logs?goal_id=${goalId}&from=${today}&to=${today}&limit=1`, { headers: authHeaders(token) });
       const payload = await safeJson(todayRes);
       setTodayTasks(payload?.days?.[0]?.tasks || []);
@@ -364,59 +365,199 @@ export default function PerformanceInput() {
               <p style={{ color: 'var(--text-muted)', fontSize: '0.8125rem' }}>No tasks added for today yet.</p>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                {todayTasks.map(t => (
-                  <button
-                    key={t.id}
-                    onClick={() => toggleTask(t.id)}
-                    style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      gap: '1rem',
-                      padding: '0.75rem 0.875rem',
-                      background: t.is_completed ? 'rgba(16,185,129,0.06)' : 'var(--bg-color)',
-                      border: `1px solid ${t.is_completed ? 'rgba(16,185,129,0.3)' : 'var(--panel-border)'}`,
-                      borderRadius: '8px',
-                      textAlign: 'left',
-                      cursor: 'pointer',
-                      width: '100%',
-                      transition: 'all 0.2s ease',
-                    }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', minWidth: 0 }}>
-                      {t.is_completed
-                        ? <CheckCircle size={18} style={{ color: 'var(--success)', flexShrink: 0 }} />
-                        : <Circle size={18} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
-                      }
-                      <div style={{ minWidth: 0 }}>
-                        <p style={{
-                          fontSize: '0.8125rem', fontWeight: 700,
-                          color: t.is_completed ? 'var(--text-muted)' : 'var(--text-primary)',
-                          textDecoration: t.is_completed ? 'line-through' : 'none',
-                          whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'
-                        }}>{t.title}</p>
-                        <p style={{ fontSize: '0.625rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{t.task_type}</p>
+                {todayTasks.map(task => {
+                  let tutorial = task.tutorial || null;
+                  let description = null;
+                  let estimatedTime = null;
+                  let difficulty = null;
+
+                  if (task.details) {
+                    try {
+                      const parsed = typeof task.details === 'string' ? JSON.parse(task.details) : task.details;
+                      tutorial = tutorial || parsed?.tutorial || null;
+                      description = parsed?.description || null;
+                      estimatedTime = parsed?.estimated_time || null;
+                      difficulty = parsed?.difficulty || null;
+                    } catch (e) { /* ignore bad JSON */ }
+                  }
+
+                  const cleanTitle = (task.title || '').replace(/https?:\/\/\S+/g, '').replace(/\(Tutorial:?\s*\)/gi, '').trim();
+
+                  return (
+                    <div key={task.id} className="task-card-wrap" style={{
+                      display: 'flex', flexDirection: 'column', padding: '1.25rem',
+                      background: task.is_completed ? 'rgba(16, 185, 129, 0.04)' : 'var(--bg-color)',
+                      borderRadius: '14px',
+                      border: `1px solid ${task.is_completed ? 'rgba(16, 185, 129, 0.2)' : 'var(--panel-border)'}`,
+                      transition: 'all 0.25s ease',
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.875rem' }}>
+                        <div
+                          onClick={() => toggleTask(task.id)}
+                          style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
+                        >
+                          {task.is_completed
+                            ? <CheckCircle2 size={22} color="var(--success)" />
+                            : <Circle size={22} color="var(--text-muted)" />
+                          }
+                        </div>
+
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <p style={{
+                            fontSize: '0.9375rem', fontWeight: 700, margin: 0,
+                            color: task.is_completed ? 'var(--text-muted)' : 'var(--text-primary)',
+                            textDecoration: task.is_completed ? 'line-through' : 'none',
+                            lineHeight: 1.4
+                          }}>
+                            {cleanTitle}
+                          </p>
+                          {description && (
+                            <p style={{
+                              fontSize: '0.75rem', color: 'var(--text-secondary)', margin: '0.2rem 0 0 0',
+                              lineHeight: 1.4
+                            }}>
+                              {description}
+                            </p>
+                          )}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.35rem', flexWrap: 'wrap' }}>
+                            <span style={{
+                              fontSize: '0.6rem', fontWeight: 800, color: 'var(--accent-primary)',
+                              textTransform: 'uppercase', letterSpacing: '0.08em',
+                              background: 'rgba(99, 102, 241, 0.08)', padding: '0.15rem 0.5rem',
+                              borderRadius: '4px'
+                            }}>
+                              {task.task_type}
+                            </span>
+                            {estimatedTime && (
+                              <span style={{
+                                fontSize: '0.6rem', fontWeight: 700, color: 'var(--text-muted)',
+                                background: 'var(--panel-bg)', padding: '0.15rem 0.5rem',
+                                borderRadius: '4px', border: '1px solid var(--panel-border)'
+                              }}>
+                                ⏱ {estimatedTime}
+                              </span>
+                            )}
+                            {difficulty && (
+                              <span style={{
+                                fontSize: '0.6rem', fontWeight: 700, 
+                                color: difficulty.toLowerCase() === 'hard' ? 'var(--danger)' : difficulty.toLowerCase() === 'easy' ? 'var(--success)' : 'var(--warning)',
+                                background: 'var(--panel-bg)', padding: '0.15rem 0.5rem',
+                                borderRadius: '4px', border: '1px solid var(--panel-border)'
+                              }}>
+                                {difficulty}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        <span style={{
+                          fontSize: '0.65rem', fontWeight: 700, flexShrink: 0,
+                          color: task.is_completed ? 'var(--success)' : 'var(--text-muted)',
+                          textTransform: 'uppercase', letterSpacing: '0.05em'
+                        }}>
+                          {task.is_completed ? 'Done' : 'Pending'}
+                        </span>
+
+                        <button
+                          onClick={() => deleteTask(task.id)}
+                          style={{ background: 'none', border: 'none', color: 'rgba(239, 68, 68, 0.35)', cursor: 'pointer', padding: '0.4rem', borderRadius: '8px', transition: 'all 0.2s', flexShrink: 0 }}
+                          onMouseEnter={e => { e.currentTarget.style.color = 'rgb(239, 68, 68)'; e.currentTarget.style.background = 'rgba(239, 68, 68, 0.08)'; }}
+                          onMouseLeave={e => { e.currentTarget.style.color = 'rgba(239, 68, 68, 0.35)'; e.currentTarget.style.background = 'none'; }}
+                        >
+                          <Trash2 size={15} />
+                        </button>
                       </div>
+
+                      {/* ── Tutorial Recommendation Card ── */}
+                      {tutorial && tutorial.thumbnail && (
+                        <div
+                          className="tutorial-embed"
+                          style={{
+                            marginTop: '1rem', marginLeft: '2.25rem',
+                            display: 'flex', gap: '0.875rem',
+                            background: 'linear-gradient(135deg, rgba(99,102,241,0.04) 0%, rgba(139,92,246,0.06) 100%)',
+                            borderRadius: '10px',
+                            border: '1px solid rgba(99,102,241,0.12)',
+                            padding: '0.75rem',
+                            alignItems: 'center',
+                            transition: 'all 0.25s ease',
+                            cursor: 'default'
+                          }}
+                          onMouseEnter={e => { e.currentTarget.style.border = '1px solid rgba(99,102,241,0.3)'; e.currentTarget.style.boxShadow = '0 4px 20px rgba(99,102,241,0.1)'; }}
+                          onMouseLeave={e => { e.currentTarget.style.border = '1px solid rgba(99,102,241,0.12)'; e.currentTarget.style.boxShadow = 'none'; }}
+                        >
+                          <a href={tutorial.url} target="_blank" rel="noreferrer" style={{ flexShrink: 0, textDecoration: 'none' }}>
+                            <div style={{
+                              position: 'relative', width: '130px', height: '74px',
+                              borderRadius: '8px', overflow: 'hidden',
+                              boxShadow: '0 2px 8px rgba(0,0,0,0.15)'
+                            }}>
+                              <img
+                                src={tutorial.thumbnail}
+                                alt={tutorial.title || 'Tutorial'}
+                                style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                                onError={e => { e.target.style.display = 'none'; }}
+                              />
+                              <div style={{
+                                position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+                                background: 'rgba(0,0,0,0.25)',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                transition: 'background 0.2s'
+                              }}>
+                                <div style={{
+                                  width: '32px', height: '32px', borderRadius: '50%',
+                                  background: 'rgba(255,255,255,0.9)',
+                                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                  boxShadow: '0 2px 8px rgba(0,0,0,0.2)'
+                                }}>
+                                  <PlayCircle size={20} color="var(--accent-primary)" />
+                                </div>
+                              </div>
+                            </div>
+                          </a>
+
+                          <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+                            <p style={{
+                              fontSize: '0.8rem', fontWeight: 700, margin: 0,
+                              color: 'var(--text-primary)',
+                              overflow: 'hidden', textOverflow: 'ellipsis',
+                              display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
+                              lineHeight: 1.35
+                            }}>
+                              {tutorial.title}
+                            </p>
+                            {tutorial.channel && (
+                              <p style={{ fontSize: '0.68rem', color: 'var(--text-muted)', margin: 0, fontWeight: 500 }}>
+                                {tutorial.channel}
+                              </p>
+                            )}
+                            <a
+                              href={tutorial.url}
+                              target="_blank"
+                              rel="noreferrer"
+                              style={{
+                                display: 'inline-flex', alignItems: 'center', gap: '0.35rem',
+                                fontSize: '0.7rem', fontWeight: 800,
+                                color: '#fff', textDecoration: 'none',
+                                marginTop: '0.35rem',
+                                background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+                                padding: '0.3rem 0.7rem',
+                                borderRadius: '6px',
+                                width: 'fit-content',
+                                transition: 'all 0.2s ease',
+                                boxShadow: '0 2px 6px rgba(99,102,241,0.3)'
+                              }}
+                              onMouseEnter={e => { e.currentTarget.style.boxShadow = '0 4px 12px rgba(99,102,241,0.5)'; e.currentTarget.style.transform = 'translateY(-1px)'; }}
+                              onMouseLeave={e => { e.currentTarget.style.boxShadow = '0 2px 6px rgba(99,102,241,0.3)'; e.currentTarget.style.transform = 'translateY(0)'; }}
+                            >
+                              <PlayCircle size={12} /> Watch Tutorial
+                            </a>
+                          </div>
+                        </div>
+                      )}
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <span style={{
-                        fontSize: '0.7rem', fontWeight: 700, flexShrink: 0,
-                        padding: '0.2rem 0.6rem', borderRadius: '6px',
-                        background: t.is_completed ? 'var(--success-subtle)' : 'var(--panel-bg)',
-                        color: t.is_completed ? 'var(--success)' : 'var(--text-muted)',
-                        border: `1px solid ${t.is_completed ? 'rgba(16,185,129,0.2)' : 'var(--panel-border)'}`,
-                      }}>
-                        {t.is_completed ? 'Done' : 'Pending'}
-                      </span>
-                      <button 
-                        onClick={(e) => { e.stopPropagation(); deleteTask(t.id); }}
-                        style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: '0.2rem' }}
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
-                  </button>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>

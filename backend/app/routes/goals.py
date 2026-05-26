@@ -64,3 +64,19 @@ def list_goals():
     user = query_one("SELECT active_goal_id FROM users WHERE id = ?", (user_id,))
     return jsonify({"goals": goals, "active_goal_id": user.get("active_goal_id") if user else None})
 
+
+@bp.put("/goals/active")
+@jwt_required()
+def set_active_goal():
+    user_id = int(get_jwt_identity())
+    data = require_json(request)
+    goal_id = as_int(data.get("goal_id"), field="goal_id")
+
+    # Verify goal belongs to user
+    goal = query_one("SELECT id FROM goals WHERE id = ? AND user_id = ?", (goal_id, user_id))
+    if not goal:
+        raise ApiError("not_found", "Goal not found.", 404)
+
+    execute("UPDATE users SET active_goal_id = ?, updated_at = datetime('now') WHERE id = ?", (goal_id, user_id))
+    return jsonify({"success": True, "active_goal_id": goal_id})
+

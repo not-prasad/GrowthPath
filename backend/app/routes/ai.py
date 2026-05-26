@@ -62,23 +62,35 @@ def ai_brief():
     goal_id = _resolve_goal_id(user_id, request.args.get("goal_id"))
 
     goal = query_one("SELECT title FROM goals WHERE id=? AND user_id=?", (goal_id, user_id))
+    
+    # Filter by week if provided
+    week_start = request.args.get("week_start")
+    week_end = request.args.get("week_end")
+    
+    where_clause = "user_id=? AND goal_id=?"
+    params = [user_id, goal_id]
+    
+    if week_start and week_end:
+        where_clause += " AND log_date BETWEEN ? AND ?"
+        params += [week_start, week_end]
+
     logs = query_all(
-        """
+        f"""
         SELECT log_date, performance_score, focus_level, friction_count, energy_state
         FROM daily_logs
-        WHERE user_id=? AND goal_id=?
+        WHERE {where_clause}
         ORDER BY log_date ASC
         LIMIT 120
         """,
-        (user_id, goal_id),
+        tuple(params),
     )
     tasks = query_all(
-        """
+        f"""
         SELECT log_date, task_type, is_completed
         FROM daily_tasks
-        WHERE user_id=? AND goal_id=?
+        WHERE {where_clause}
         """,
-        (user_id, goal_id),
+        tuple(params),
     )
 
     line = interpret_line(compute_line_chart(logs))

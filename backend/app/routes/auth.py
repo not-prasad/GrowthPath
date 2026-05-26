@@ -22,8 +22,11 @@ def register():
             "INSERT INTO users(email, password_hash) VALUES (?, ?)",
             (email, hashed),
         )
-    except Exception:
-        # Let db unique constraint map to 409; otherwise generic.
+    except Exception as e:
+        # Check for unique constraint violation (SQLite or Postgres)
+        msg = str(e).lower()
+        if "unique" in msg or "already exists" in msg:
+            raise ApiError("conflict", "This email is already registered.", 409)
         raise
 
     token = create_access_token(identity=str(user_id))

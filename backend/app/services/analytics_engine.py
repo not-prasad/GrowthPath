@@ -288,8 +288,10 @@ def interpret_line(line: Dict[str, Any]) -> Dict[str, Any]:
             interp = "Your performance is slightly declining."
         else:
             interp = "Your performance is stable."
-    else:
+    elif len(ys) >= 3:
         interp = "Log more days to see your trend."
+    else:
+        interp = "Collecting baseline data..."
 
     return {
         "data": line,
@@ -300,6 +302,7 @@ def interpret_line(line: Dict[str, Any]) -> Dict[str, Any]:
             "points": int(line.get("n", 0) or 0),
         },
         "interpretation": interp,
+        "insufficient_data": len(ys) < 3
     }
 
 
@@ -320,10 +323,14 @@ def interpret_boxplot(box: Dict[str, Any]) -> Dict[str, Any]:
     else:
         interp = base
 
+    if box.get("n", 0) < 5:
+        interp = "Collecting baseline data..."
+
     return {
         "data": box,
         "stats": box,
         "interpretation": interp,
+        "insufficient_data": box.get("n", 0) < 5
     }
 
 
@@ -331,10 +338,13 @@ def interpret_scatter(scatter: Dict[str, Any], *, kind: str) -> Dict[str, Any]:
     pts = list(scatter.get("data") or [])
     xs = [float(p.get("x", 0) or 0) for p in pts]
     ys = [float(p.get("y", 0) or 0) for p in pts]
+    n_pts = len(pts)
     corr = _pearson_corr(xs, ys)
     corr_r = round(corr, 2)
 
-    if kind == "focus":
+    if n_pts < 5:
+        interp = "Collecting baseline data..."
+    elif kind == "focus":
         if corr > 0.6:
             interp = "Higher focus strongly improves performance."
         elif corr >= 0.3:
@@ -351,8 +361,9 @@ def interpret_scatter(scatter: Dict[str, Any], *, kind: str) -> Dict[str, Any]:
 
     return {
         "data": scatter,
-        "stats": {"correlation": corr_r, "points": int(scatter.get("n", 0) or 0)},
+        "stats": {"correlation": corr_r if n_pts >= 5 else 0.0, "points": n_pts},
         "interpretation": interp,
+        "insufficient_data": n_pts < 5
     }
 
 
@@ -369,10 +380,15 @@ def interpret_weekday(weekday: Dict[str, Any]) -> Dict[str, Any]:
     best = max(scored, key=lambda d: float(d.get("avg_score", 0) or 0))
     worst = min(scored, key=lambda d: float(d.get("avg_score", 0) or 0))
     interp = f"You perform best on {best['weekday']}. Your performance dips on {worst['weekday']}."
+    
+    if len(scored) < 3:
+        interp = "Collecting baseline data..."
+
     return {
         "data": weekday,
-        "stats": {"best_weekday": best["weekday"], "worst_weekday": worst["weekday"]},
+        "stats": {"best_weekday": best['weekday'], "worst_weekday": worst['weekday']},
         "interpretation": interp,
+        "insufficient_data": len(scored) < 3
     }
 
 
@@ -384,6 +400,7 @@ def interpret_category_completion(bar: Dict[str, Any]) -> Dict[str, Any]:
             "data": bar,
             "stats": {"lowest_category": None},
             "interpretation": "Add tasks to see which areas you complete most.",
+            "insufficient_data": True
         }
     lowest = min(valid, key=lambda d: float(d.get("completion_rate", 0) or 0))
     cat = str(lowest.get("category", "tasks"))
@@ -398,6 +415,7 @@ def interpret_category_completion(bar: Dict[str, Any]) -> Dict[str, Any]:
         "data": bar,
         "stats": {"lowest_category": cat, "lowest_completion_rate": float(lowest.get("completion_rate", 0) or 0)},
         "interpretation": interp,
+        "insufficient_data": False
     }
 
 def compute_full_analysis(log_rows: List[Dict[str, Any]], task_rows: List[Dict[str, Any]]) -> Dict[str, Any]:
@@ -421,10 +439,11 @@ def compute_full_analysis(log_rows: List[Dict[str, Any]], task_rows: List[Dict[s
         "category_completion": interpret_category_completion(category_completion_raw),
     }
 
-def compute_streak(log_rows: List[Dict[str, Any]]) -> Dict[str, int]:
+def compute_streak(log_rows: List[Dict[str, Any]], today_date_str: Optional[str] = None) -> Dict[str, int]:
     """
     Compute current streak, longest streak, and total days logged.
     Requires all historical logs for the user+goal, sorted chronologically.
+    Uses today_date_str (YYYY-MM-DD) for timezone-aware streak validation.
     """
     if not log_rows:
         return {"current_streak": 0, "longest_streak": 0, "total_days_logged": 0}
@@ -456,15 +475,23 @@ def compute_streak(log_rows: List[Dict[str, Any]]) -> Dict[str, int]:
 
     # Calculate current streak backwards from the most recent log
     # If the latest log is older than yesterday, the streak is broken.
-    if not dates:
-        return {"current_streak": 0, "longest_streak": 0, "total_days_logged": 0}
-        
     latest_log = dates[-1]
-    today = datetime.now().date()
     
-    if (today - latest_log).days > 1:
+    # Use provided today_date or fall back to system today
+    if today_date_str:
+        try:
+            today = datetime.strptime(today_date_str, "%Y-%m-%d").date()
+        except:
+            today = datetime.now().date()
+    else:
+        today = datetime.now().date()
+    
+    diff = (today - latest_log).days
+    if diff > 1:
+        # Streak broken (last log was before yesterday)
         current_streak = 0
     else:
+        # Streak active (last log is today or yesterday)
         current_streak = 0
         cursor = latest_log
         date_set = set(dates)

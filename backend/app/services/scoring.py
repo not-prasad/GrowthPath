@@ -8,7 +8,8 @@ def _clamp(x: float, lo: float, hi: float) -> float:
 
 @dataclass(frozen=True)
 class ScoreInputs:
-    primary_done: bool
+    primary_done: int
+    primary_total: int
     support_done: int
     support_total: int
     optimize_done: int
@@ -25,6 +26,8 @@ def compute_performance_score(inp: ScoreInputs) -> float:
     Deterministic, no DB access, rounded to 2 decimals.
     """
     # Normalize inputs
+    primary_total = max(int(inp.primary_total or 0), 0)
+    primary_done = max(min(int(inp.primary_done or 0), primary_total), 0)
     support_total = max(int(inp.support_total or 0), 0)
     support_done = max(min(int(inp.support_done or 0), support_total), 0)
     optimize_total = max(int(inp.optimize_total or 0), 0)
@@ -36,8 +39,8 @@ def compute_performance_score(inp: ScoreInputs) -> float:
     friction = max(int(inp.friction_count or 0), 0)
 
     # Weighted components (0..1 each)
-    # Primary is now CRITICAL. If not done, that 50-90% of the score is 0.
-    primary_score = 1.0 if bool(inp.primary_done) else 0.0 
+    # Primary is CRITICAL. Score is now proportional.
+    primary_score = (primary_done / primary_total) if primary_total > 0 else 0.0 
     
     support_score = (support_done / support_total) if support_total > 0 else 0.0
     optimize_score = (optimize_done / optimize_total) if optimize_total > 0 else 0.0
@@ -64,7 +67,7 @@ def compute_performance_score(inp: ScoreInputs) -> float:
     else:
         # Split the 0.40 among available components
         share = total_dynamic_weight / len(components_to_weight)
-        w_primary = 0.50
+        w_primary = 0.50    
         w_support = share if 'support' in components_to_weight else 0
         w_optimize = share if 'optimize' in components_to_weight else 0
         w_custom = share if 'custom' in components_to_weight else 0
@@ -80,6 +83,10 @@ def compute_performance_score(inp: ScoreInputs) -> float:
     # Base score 0..100
     base = weighted * 100.0
 
+    # Edge Case: If no tasks exist at all, the score is 0 (No participation trophies)
+    if primary_total == 0 and support_total == 0 and optimize_total == 0 and custom_total == 0:
+        base = 0.0
+
     # Friction modifier: non-linear penalty
     # 1-2 frictions is normal, 3+ is a significant drag.
     penalty = 0
@@ -91,17 +98,12 @@ def compute_performance_score(inp: ScoreInputs) -> float:
     return round(final_score, 2)
 
 
-def compute_xp(primary_done: bool, support_done: int, optimize_done: int, custom_done: int = 0) -> int:
+def compute_xp(primary_done: int, primary_total: int, support_done: int, optimize_done: int, custom_done: int = 0) -> int:
     """
-    Balanced XP reward system.
+    Simplified XP reward system: 100 XP per task completed.
     """
-    xp = 0
-    if primary_done:
-        xp += 250 
-    xp += (int(support_done or 0) * 35) 
-    xp += (int(optimize_done or 0) * 60)
-    xp += (int(custom_done or 0) * 20) # 20 XP per custom task
-    return xp
+    total_done = primary_done + support_done + optimize_done + custom_done
+    return int(total_done * 100)
 
 
 def compute_level(total_xp: int) -> int:

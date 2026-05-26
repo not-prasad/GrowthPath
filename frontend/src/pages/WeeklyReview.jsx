@@ -2,20 +2,23 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   TrendingUp, TrendingDown, Minus, Zap, Calendar, Target,
-  Activity, Flame, Brain, Sparkles, ArrowRight, CheckCircle
+  Activity, Flame, Brain, Sparkles, ArrowRight, CheckCircle, Filter
 } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid
 } from 'recharts';
 import DashboardLayout from '../components/DashboardLayout';
 import { useAuth } from '../context/AuthContext';
-import { API_BASE, authHeaders, safeJson } from '../api/base';
+import { API_BASE, authHeaders, safeJson, getTodayDate, getRelativeDate } from '../api/base';
 
 function WeeklyReview() {
   const [goal, setGoal] = useState(null);
   const [days, setDays] = useState([]);
   const [insight, setInsight] = useState(null);
+  const [weeks, setWeeks] = useState([]);
+  const [selectedWeek, setSelectedWeek] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const { token, logout } = useAuth();
   const navigate = useNavigate();
 
@@ -35,16 +38,10 @@ function WeeklyReview() {
         if (!selected) { navigate('/setup'); return; }
         setGoal(selected);
 
-        // Fetch last 7 days
-        const to = new Date().toISOString().slice(0, 10);
-        const from = new Date(Date.now() - 6 * 86400000).toISOString().slice(0, 10);
-        const [logsRes, insightRes] = await Promise.all([
-          fetch(`${API_BASE}/logs?goal_id=${selected.id}&from=${from}&to=${to}&limit=7`, { headers }),
-          fetch(`${API_BASE}/ai/insights?goal_id=${selected.id}`, { headers }),
-        ]);
+        // Fetch available weeks
+        const weeksRes = await fetch(`${API_BASE}/analytics/weeks?goal_id=${selected.id}`, { headers });
+        if (weeksRes.ok) setWeeks(await safeJson(weeksRes));
 
-        if (logsRes.ok) setDays((await safeJson(logsRes))?.days || []);
-        if (insightRes.ok) setInsight((await safeJson(insightRes))?.insights?.[0] || null);
       } catch (err) {
         console.error(err);
       } finally {
@@ -53,6 +50,35 @@ function WeeklyReview() {
     };
     fetchData();
   }, [token, navigate, logout]);
+
+  // Handle Weekly Filter Change
+  useEffect(() => {
+    if (!goal) return;
+    const fetchFilteredData = async () => {
+      setRefreshing(true);
+      try {
+        const headers = authHeaders(token);
+        const to = selectedWeek ? selectedWeek.week_end : getTodayDate();
+        const from = selectedWeek ? selectedWeek.week_start : getRelativeDate(-6);
+        
+        const [logsRes, insightRes] = await Promise.all([
+          fetch(`${API_BASE}/logs?goal_id=${goal.id}&from=${from}&to=${to}&limit=7`, { headers }),
+          fetch(`${API_BASE}/ai/brief?goal_id=${goal.id}&week_start=${from}&week_end=${to}`, { headers }),
+        ]);
+
+        if (logsRes.ok) setDays((await safeJson(logsRes))?.days || []);
+        if (insightRes.ok) {
+            const brief = await safeJson(insightRes);
+            setInsight(brief?.brief || null);
+        }
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setRefreshing(false);
+      }
+    };
+    fetchFilteredData();
+  }, [selectedWeek, goal, token]);
 
   const stats = useMemo(() => {
     if (!days.length) return null;
@@ -78,11 +104,15 @@ function WeeklyReview() {
   }, [days]);
 
   const chartData = useMemo(() => {
-    const today = new Date();
+    if (!days.length && !selectedWeek) return [];
+    
+    // If we have a selected week, use its range. Otherwise use last 7 days.
+    const start = selectedWeek ? new Date(selectedWeek.week_start) : new Date(Date.now() - 6 * 86400000);
+    
     return Array.from({ length: 7 }, (_, i) => {
-      const d = new Date(today);
-      d.setDate(today.getDate() - (6 - i));
-      const dateStr = d.toISOString().slice(0, 10);
+      const d = new Date(start);
+      d.setDate(start.getDate() + i);
+      const dateStr = d.toISOString().split('T')[0];
       const log = days.find(l => l.date?.startsWith(dateStr));
       return {
         day: d.toLocaleDateString('en-US', { weekday: 'short' }),
@@ -90,7 +120,7 @@ function WeeklyReview() {
         logged: !!log,
       };
     });
-  }, [days]);
+  }, [days, selectedWeek]);
 
   const trend = stats
     ? stats.avg >= 70 ? 'up' : stats.avg >= 45 ? 'stable' : 'down'
@@ -117,13 +147,36 @@ function WeeklyReview() {
             <p className="premium-kicker">Weekly Progress</p>
             <h1 className="premium-title">Weekly Review</h1>
             <p className="premium-subtitle">
-              {new Date(Date.now() - 6 * 86400000).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} –{' '}
-              {new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+              {selectedWeek ? selectedWeek.label : (
+                <>
+                  {new Date(Date.now() - 6 * 86400000).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} –{' '}
+                  {new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                </>
+              )}
             </p>
           </div>
-          <button className="btn btn-primary" onClick={() => navigate('/log')} style={{ gap: '0.5rem' }}>
-            <Zap size={16} /> Log Today
-          </button>
+          <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <Filter size={14} className="text-muted" />
+              <select 
+                className="form-control" 
+                style={{ width: 'auto', minWidth: '160px', padding: '0.4rem 0.75rem', height: 'auto', fontSize: '0.85rem' }}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (!val) setSelectedWeek(null);
+                  else setSelectedWeek(weeks.find(w => w.week_start === val));
+                }}
+              >
+                <option value="">Current Week</option>
+                {weeks.map(w => (
+                  <option key={w.week_start} value={w.week_start}>{w.label}</option>
+                ))}
+              </select>
+            </div>
+            <button className="btn btn-primary" onClick={() => navigate('/log')} style={{ gap: '0.5rem' }}>
+              <Zap size={16} /> Log Today
+            </button>
+          </div>
         </header>
 
         {/* Stat Grid */}
@@ -191,19 +244,28 @@ function WeeklyReview() {
 
         {/* AI Insight */}
         {insight && (
-          <div style={{
-            background: 'var(--panel-bg)', border: '1px solid var(--panel-border)',
-            borderLeft: '3px solid var(--accent-primary)',
-            borderRadius: '16px', padding: '1.5rem',
-            boxShadow: 'var(--card-shadow)',
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.75rem' }}>
-              <Sparkles size={16} color="var(--accent-primary)" />
-              <p style={{ fontSize: '0.65rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--accent-primary)' }}>
-                AI Weekly Insight — {insight.title}
-              </p>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1rem', opacity: refreshing ? 0.5 : 1 }}>
+            <div style={{ background: 'var(--panel-bg)', border: '1px solid var(--panel-border)', borderLeft: '3px solid var(--accent-primary)', borderRadius: '16px', padding: '1.5rem', boxShadow: 'var(--card-shadow)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.75rem' }}>
+                <Sparkles size={16} color="var(--accent-primary)" />
+                <p style={{ fontSize: '0.65rem', fontWeight: 800, textTransform: 'uppercase', color: 'var(--accent-primary)' }}>Analyst Brief</p>
+                </div>
+                <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', lineHeight: 1.6 }}>{insight.daily_analyst_brief}</p>
             </div>
-            <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', lineHeight: 1.6 }}>{insight.body}</p>
+            <div style={{ background: 'var(--panel-bg)', border: '1px solid var(--panel-border)', borderLeft: '3px solid var(--success)', borderRadius: '16px', padding: '1.5rem', boxShadow: 'var(--card-shadow)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.75rem' }}>
+                <CheckCircle size={16} color="var(--success)" />
+                <p style={{ fontSize: '0.65rem', fontWeight: 800, textTransform: 'uppercase', color: 'var(--success)' }}>Weekly Retro</p>
+                </div>
+                <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', lineHeight: 1.6 }}>{insight.weekly_retro}</p>
+            </div>
+            <div style={{ background: 'var(--panel-bg)', border: '1px solid var(--panel-border)', borderLeft: '3px solid var(--danger)', borderRadius: '16px', padding: '1.5rem', boxShadow: 'var(--card-shadow)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.75rem' }}>
+                <Activity size={16} color="var(--danger)" />
+                <p style={{ fontSize: '0.65rem', fontWeight: 800, textTransform: 'uppercase', color: 'var(--danger)' }}>Root Cause</p>
+                </div>
+                <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', lineHeight: 1.6 }}>{insight.root_cause_dip_detection}</p>
+            </div>
           </div>
         )}
 

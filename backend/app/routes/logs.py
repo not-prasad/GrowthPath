@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from collections import defaultdict
 from datetime import date as _date
 from typing import Any, Dict, List, Optional
@@ -12,6 +13,7 @@ from ..database import execute, query_all, query_one
 from ..services.scoring import ScoreInputs, compute_level, compute_performance_score, compute_xp
 from ..utils.errors import ApiError
 from ..utils.validation import (
+    as_bool,
     as_date_yyyy_mm_dd,
     as_enum,
     as_int,
@@ -65,6 +67,11 @@ def upsert_daily_log():
     hurdles = data.get("hurdles")
     if hurdles is not None:
         hurdles = as_str(hurdles, field="hurdles", min_len=0, max_len=2000)
+    
+    # New: handle explicit submission
+    is_submitted_req = data.get("is_submitted")
+    if is_submitted_req is not None:
+        is_submitted_req = 1 if as_bool(is_submitted_req, field="is_submitted") else 0
 
     # Ensure log exists (insert if missing)
     existing = query_one(
@@ -74,20 +81,28 @@ def upsert_daily_log():
     if not existing:
         log_id = execute(
             """
-            INSERT INTO daily_logs(user_id, goal_id, log_date, focus_level, energy_state, friction_count, mood, notes, hurdles)
-            VALUES (?,?,?,?,?,?,?,?,?)
+            INSERT INTO daily_logs(user_id, goal_id, log_date, focus_level, energy_state, friction_count, mood, notes, hurdles, is_submitted)
+            VALUES (?,?,?,?,?,?,?,?,?,?)
             """,
-            (user_id, goal_id, log_date, focus_level, energy_state, friction_count, mood, notes, hurdles),
+            (user_id, goal_id, log_date, focus_level, energy_state, friction_count, mood, notes, hurdles, is_submitted_req if is_submitted_req is not None else 0),
         )
     else:
         log_id = int(existing["id"])
+        
+        # Only update is_submitted if explicitly passed in the request
+        sub_clause = ""
+        sub_params = []
+        if is_submitted_req is not None:
+            sub_clause = ", is_submitted=?"
+            sub_params = [is_submitted_req]
+
         execute(
-            """
+            f"""
             UPDATE daily_logs
-            SET focus_level=?, energy_state=?, friction_count=?, mood=?, notes=?, hurdles=?, updated_at=datetime('now')
+            SET focus_level=?, energy_state=?, friction_count=?, mood=?, notes=?, hurdles=?, updated_at=datetime('now'){sub_clause}
             WHERE id=? AND user_id=? AND goal_id=?
             """,
-            (focus_level, energy_state, friction_count, mood, notes, hurdles, log_id, user_id, goal_id),
+            tuple([focus_level, energy_state, friction_count, mood, notes, hurdles] + sub_params + [log_id, user_id, goal_id]),
         )
 
     # Trigger recalculation
@@ -132,7 +147,8 @@ def recalculate_log_stats(user_id: int, goal_id: int, log_date: str) -> None:
         (user_id, goal_id, log_date),
     ) or {}
 
-    primary_done = int(counts.get("primary_done", 0) or 0) > 0
+    primary_total = int(counts.get("primary_total", 0) or 0)
+    primary_done = int(counts.get("primary_done", 0) or 0)
     support_total = int(counts.get("support_total", 0) or 0)
     support_done = int(counts.get("support_done", 0) or 0)
     optimize_total = int(counts.get("optimize_total", 0) or 0)
@@ -143,6 +159,7 @@ def recalculate_log_stats(user_id: int, goal_id: int, log_date: str) -> None:
     score = compute_performance_score(
         ScoreInputs(
             primary_done=primary_done,
+            primary_total=primary_total,
             support_done=support_done,
             support_total=support_total,
             optimize_done=optimize_done,
@@ -155,35 +172,41 @@ def recalculate_log_stats(user_id: int, goal_id: int, log_date: str) -> None:
     )
     xp_gained = compute_xp(
         primary_done=primary_done, 
+        primary_total=primary_total,
         support_done=support_done, 
         optimize_done=optimize_done,
         custom_done=custom_done
     )
 
     execute(
-        "UPDATE daily_logs SET performance_score=?, xp_gained=?, updated_at=datetime('now') WHERE id=?",
+        """
+        UPDATE daily_logs 
+        SET performance_score = CASE WHEN is_submitted=1 THEN ? ELSE 0.0 END,
+            xp_gained = CASE WHEN is_submitted=1 THEN ? ELSE 0 END,
+            updated_at=datetime('now') 
+        WHERE id=?
+        """,
         (score, xp_gained, log_id),
     )
 
-    # Update user xp/level ADDITIVELY (Integrity Fix):
-    # Instead of wiping, we ensure the user's total_xp in the 'users' table 
-    # is synced with the TOTAL of all daily_logs PLUS any manual bonuses.
-    # However, since manual bonuses are rare, we'll do a "Delta Sync".
+    # Update user xp/level ATOMICALLY (Source of Truth Fix):
+    # We sync the user's total_xp with the SUM of all submitted logs.
+    # This prevents race conditions and ensures consistency if logs are deleted/edited.
+    execute(
+        """
+        UPDATE users 
+        SET total_xp = (SELECT COALESCE(SUM(xp_gained), 0) FROM daily_logs WHERE user_id = ? AND is_submitted = 1),
+            updated_at = datetime('now')
+        WHERE id = ?
+        """,
+        (user_id, user_id)
+    )
     
-    # Get current sum of logs
-    totals = query_one("SELECT SUM(xp_gained) AS total_from_logs FROM daily_logs WHERE user_id=?", (user_id,))
-    total_from_logs = int(totals.get("total_from_logs", 0) or 0) if totals else 0
-    
-    # We should also account for any bonuses that are NOT in daily_logs.
-    # For now, let's just make sure total_xp doesn't drop.
+    # Recalculate level based on new total
     current_user = query_one("SELECT total_xp FROM users WHERE id=?", (user_id,))
-    current_xp = int(current_user["total_xp"] or 0)
-    
-    # If current_xp is higher than total_from_logs, it means user has bonuses.
-    # We only update if the new total from logs (which was just updated) would push the total higher.
-    final_xp = max(current_xp, total_from_logs)
+    final_xp = int(current_user["total_xp"] or 0)
     level = compute_level(final_xp)
-    execute("UPDATE users SET total_xp=?, level=?, updated_at=datetime('now') WHERE id=?", (final_xp, level, user_id))
+    execute("UPDATE users SET level=?, updated_at=datetime('now') WHERE id=?", (level, user_id))
 
 
 @bp.get("/logs")
@@ -254,6 +277,18 @@ def get_logs_grouped():
 
     tasks_by_date: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
     for t in tasks:
+        # Parse tutorial metadata from the details JSON column
+        raw_details = t.get('details')
+        tutorial = None
+        if raw_details and isinstance(raw_details, str):
+            try:
+                parsed = json.loads(raw_details)
+                tutorial = parsed.get('tutorial') if isinstance(parsed, dict) else None
+            except (json.JSONDecodeError, TypeError):
+                pass
+        elif raw_details and isinstance(raw_details, dict):
+            tutorial = raw_details.get('tutorial')
+        t['tutorial'] = tutorial
         tasks_by_date[str(t["log_date"])].append(t)
 
     days = []
@@ -269,6 +304,7 @@ def get_logs_grouped():
                 "friction_count": int(l.get("friction_count", 0) or 0),
                 "notes": l.get("notes"),
                 "hurdles": l.get("hurdles"),
+                "is_submitted": bool(l.get("is_submitted", 0)),
                 "tasks": tasks_by_date.get(d, []),
             }
         )
